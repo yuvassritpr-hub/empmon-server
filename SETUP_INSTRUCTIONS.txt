@@ -1,0 +1,95 @@
+EmpMon V8 — Setup Instructions
+================================
+W-SAFE REINSURANCE — IT Department
+
+ARCHITECTURE
+------------
+OLD (broken):  Each PC → write to own OneDrive → IT reads from OneDrive
+                Problem: IT machine can't see other employees' OneDrive folders
+
+NEW (fixed):   Each PC → HTTP POST → Central Server → SQLite Database
+                Solution: All data goes to ONE place; dashboard reads from DB
+
+
+STEP 1 — SET UP THE CENTRAL SERVER (IT Admin PC)
+-------------------------------------------------
+1. Install Python: https://python.org (check "Add to PATH")
+2. Open Command Prompt, run: pip install flask
+3. Double-click START_SERVER.bat
+4. Note the server IP shown (e.g. http://192.168.1.50:5000)
+5. Open http://localhost:5000 in your browser — this is the dashboard
+
+The server must stay running to receive employee data.
+Consider running it on a dedicated PC or server.
+
+
+STEP 2 — CONFIGURE THE EMPLOYEE AGENT
+--------------------------------------
+1. Open employee_agent.py in Notepad
+2. Find this line near the top:
+       SERVER_URL = "http://192.168.1.100:5000"
+3. Change 192.168.1.100 to your server PC's IP address
+4. Save the file
+
+
+STEP 3 — DEPLOY TO EACH EMPLOYEE PC
+-------------------------------------
+Option A — Manual (go to each PC):
+  1. Copy employee_agent.py to the employee PC
+  2. Run DEPLOY_TO_EMPLOYEE.bat (installs Python packages + creates startup task)
+  3. Done. The agent starts at every login automatically.
+
+Option B — Network share:
+  1. Put employee_agent.py on a shared network folder
+  2. On each employee PC, run:
+       pip install requests pywin32 psutil
+       schtasks /create /tn "EmpMonV8Agent" /tr "pythonw \\SERVER\Share\employee_agent.py" /sc ONLOGON /rl HIGHEST /f
+
+
+STEP 4 — VERIFY
+---------------
+1. On any employee PC, run employee_agent.py
+2. Wait 1 minute
+3. Refresh the dashboard — you should see the employee appear
+
+
+DASHBOARD FEATURES
+------------------
+- Live status: Online / Idle / Offline (colour coded)
+- First login time, last activity time
+- Active hours today vs idle hours
+- Top application being used
+- Location (city/country via IP)
+- Monthly statistics: days worked, total active hours
+- Click "View" on any employee for a detailed drill-down:
+  - Daily calendar with hours per day
+  - Top 10 apps used this month
+  - Full event history (login/logout/lock/unlock/shutdown)
+
+
+TROUBLESHOOTING
+---------------
+Q: Employee not showing in dashboard?
+A: Check debug_v8.txt in C:\EmpMonitor on the employee PC.
+   Common issues: SERVER_URL wrong, firewall blocking port 5000.
+
+Q: "Server not reachable" in debug log?
+A: Make sure central_server.py is running on the server PC.
+   Make sure Windows Firewall allows port 5000:
+     netsh advfirewall firewall add rule name="EmpMonV8" dir=in action=allow protocol=TCP localport=5000
+
+Q: Employee shows Offline even when logged in?
+A: Heartbeat may not be reaching the server. Check network/firewall.
+   Employee shows Offline if no event received in 30 minutes.
+
+Q: Old data from OneDrive system?
+A: Old data (raw_log.csv files) can be imported using import_old_data.py (see separate script).
+
+
+FILES
+-----
+central_server.py     — Run on IT admin PC. Serves the dashboard.
+employee_agent.py     — Deploy on each employee PC.
+empmon.db             — SQLite database (created automatically by server)
+START_SERVER.bat      — Easy start script for the server
+DEPLOY_TO_EMPLOYEE.bat— Easy deploy script for employee PCs
