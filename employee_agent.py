@@ -51,7 +51,7 @@ except ImportError:
 
 # ══════════════════════════════════════════════════════════
 #  CHANGE THIS TO YOUR SERVER PC'S IP ADDRESS
-SERVER_URL = "http://192.168.1.100:5000"   # ← Edit this
+SERVER_URL = "http://192.168.1.137:5000"   # ← Edit this
 # ══════════════════════════════════════════════════════════
 
 SCRIPTS_DIR      = r"C:\EmpMonitor"

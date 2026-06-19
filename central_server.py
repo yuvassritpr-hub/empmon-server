@@ -910,6 +910,454 @@ def api_status():
     return jsonify({"status": "ok", "server": COMPANY, "version": "8.0"})
 
 
+# ── KEYWORD MAPS ───────────────────────────────────────────────
+SOCIAL_MAP = {
+    "youtube":"YouTube","instagram":"Instagram","facebook":"Facebook",
+    "whatsapp":"WhatsApp","twitter":"Twitter/X","x.com":"Twitter/X",
+    "tiktok":"TikTok","snapchat":"Snapchat","linkedin":"LinkedIn",
+    "reddit":"Reddit","telegram":"Telegram","netflix":"Netflix",
+    "hotstar":"Hotstar","spotify":"Spotify","discord":"Discord",
+    "threads":"Threads","gmail":"Gmail","mail.google":"Gmail",
+}
+FILE_SHARE_MAP = {
+    "whatsapp":"WhatsApp","telegram":"Telegram","gmail":"Gmail",
+    "mail.google":"Gmail","onedrive":"OneDrive","sharepoint":"SharePoint",
+    "dropbox":"Dropbox","google drive":"Google Drive","drive.google":"Google Drive",
+    "wetransfer":"WeTransfer","filezilla":"FileZilla","winscp":"WinSCP",
+    "box.com":"Box","mega.nz":"Mega","anydesk":"AnyDesk","teamviewer":"TeamViewer",
+}
+WORK_KEYS  = ["excel","winword","powerpnt","onenote","acrobat","adobe","foxit",
+              "notepad","mstsc","putty","sap","tally","code","pycharm","studio",
+              "explorer","onedrive","sharepoint","outlook"]
+COMMS_KEYS = ["outlook","teams","zoom","slack","skype","webex","thunderbird",
+              "whatsapp","telegram","meetgeek"]
+
+
+def classify(app, title):
+    al, tl = app.lower(), title.lower()
+    for k in COMMS_KEYS:
+        if k in al: return "comms"
+    for k in WORK_KEYS:
+        if k in al: return "work"
+    if any(b in al for b in ("chrome","firefox","msedge","edge","opera","brave")):
+        for k in SOCIAL_MAP:
+            if k in tl: return "nonwork"
+        return "work"
+    return "work"
+
+
+# ── MONTHLY SUMMARY DATA BUILDER ───────────────────────────────
+def build_monthly_summary(month_str):
+    """Build full monthly summary for all employees for a given month (YYYY-MM)."""
+    with get_db() as conn:
+        emps = conn.execute(
+            "SELECT DISTINCT username, computer FROM raw_log ORDER BY username"
+        ).fetchall()
+
+    results = []
+    for emp in emps:
+        username = emp["username"]
+        computer = emp["computer"]
+
+        with get_db() as conn:
+            raw = conn.execute("""
+                SELECT * FROM raw_log
+                WHERE username=? AND computer=? AND date LIKE ?
+                ORDER BY date, time
+            """, (username, computer, f"{month_str}%")).fetchall()
+
+            app_rows = conn.execute("""
+                SELECT * FROM app_log
+                WHERE username=? AND computer=? AND date LIKE ?
+            """, (username, computer, f"{month_str}%")).fetchall()
+
+        if not raw and not app_rows:
+            continue
+
+        # Serial, location, IP — from most recent row
+        serial = ip_addr = location = "N/A"
+        for r in reversed(raw):
+            if r["serial"] and r["serial"] not in ("N/A",""):
+                serial = r["serial"]
+            city = r["city"] or "N/A"
+            reg  = r["region"] or ""
+            if city and city != "N/A":
+                location = f"{city}, {reg}".strip(", ")
+            ip = r["ip"] or "N/A"
+            if ip and "." in ip and ip != "N/A":
+                ip_addr = ip
+            if serial != "N/A" and location != "N/A" and ip_addr != "N/A":
+                break
+
+        # Days worked + session hours
+        days_worked = set()
+        pending_dt  = None
+        sess_secs   = 0.0
+        for r in raw:
+            ev = r["event"].upper()
+            try:
+                dt = datetime.strptime(r["date"]+" "+r["time"], "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                continue
+            if "LOGIN" in ev and "LOGOUT" not in ev:
+                pending_dt = dt
+                days_worked.add(r["date"])
+            elif "LOGOUT" in ev and pending_dt:
+                dur = (dt - pending_dt).total_seconds()
+                if 0 < dur < 86400:
+                    sess_secs += dur
+                    days_worked.add(pending_dt.strftime("%Y-%m-%d"))
+                pending_dt = None
+
+        # Active / idle / app classification
+        active_s = idle_s = work_s = comms_s = nonwork_s = 0
+        app_ctr  = Counter()
+        social_monthly  = defaultdict(int)   # platform → secs
+        fileshare_monthly = defaultdict(int)
+
+        for ar in app_rows:
+            dur_s  = ar["duration_sec"] or 0
+            state  = (ar["state"] or "active").lower()
+            apn    = ar["app"] or ""
+            title  = ar["window_title"] or ""
+            al, tl = apn.lower(), title.lower()
+            days_worked.add(ar["date"])
+
+            if state == "active":
+                active_s += dur_s
+                app_ctr[apn] += dur_s
+                cat = classify(apn, title)
+                if cat == "work":   work_s   += dur_s
+                elif cat == "comms": comms_s  += dur_s
+                else:               nonwork_s += dur_s
+            else:
+                idle_s += dur_s
+
+            # Social media detection
+            for kw, pname in SOCIAL_MAP.items():
+                if kw in al or kw in tl:
+                    social_monthly[pname] += dur_s
+                    break
+
+            # File sharing detection
+            for kw, pname in FILE_SHARE_MAP.items():
+                if kw in al or kw in tl:
+                    fileshare_monthly[pname] += dur_s
+                    break
+
+        total_s = work_s + comms_s + nonwork_s
+        work_pct    = round(work_s    / total_s * 100) if total_s else 0
+        comms_pct   = round(comms_s   / total_s * 100) if total_s else 0
+        nonwork_pct = round(nonwork_s / total_s * 100) if total_s else 0
+
+        top5_apps = [{"app": a, "dur": fmt_secs(s), "s": s}
+                     for a, s in app_ctr.most_common(5)]
+
+        social_alert  = [{"platform": p, "dur": fmt_secs(s), "s": s,
+                          "risk": "HIGH" if s>=3600 else "MEDIUM" if s>=1200 else "LOW"}
+                         for p, s in sorted(social_monthly.items(), key=lambda x:-x[1])]
+        fileshare_alert = [{"platform": p, "dur": fmt_secs(s), "s": s,
+                            "risk": "HIGH" if s>=3600 else "MEDIUM" if s>=600 else "LOW"}
+                           for p, s in sorted(fileshare_monthly.items(), key=lambda x:-x[1])]
+
+        avg_day_s = active_s / len(days_worked) if days_worked else 0
+
+        results.append({
+            "username":       username,
+            "computer":       computer,
+            "serial":         serial,
+            "location":       location,
+            "ip":             ip_addr,
+            "days_worked":    len(days_worked),
+            "sess_hrs":       fmt_secs(sess_secs),
+            "active_hrs":     fmt_secs(active_s),
+            "active_dec":     fmt_dec(active_s),
+            "idle_hrs":       fmt_secs(idle_s),
+            "avg_day":        fmt_secs(avg_day_s),
+            "work_pct":       work_pct,
+            "comms_pct":      comms_pct,
+            "nonwork_pct":    nonwork_pct,
+            "top5_apps":      top5_apps,
+            "social_alerts":  social_alert,
+            "fileshare_alerts": fileshare_alert,
+            "has_social":     len(social_alert) > 0,
+            "has_fileshare":  len(fileshare_alert) > 0,
+            "active_s":       active_s,
+        })
+
+    results.sort(key=lambda x: (-x["active_s"], x["username"]))
+    return results
+
+
+MONTHLY_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ company }} | Monthly Summary — {{ month_label }}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+<style>
+  body{background:#0a1520;color:#dde6f0;font-family:'Segoe UI',sans-serif;}
+  .topbar{background:#060f1a;border-bottom:2px solid #1a4a7a;padding:14px 28px;
+          display:flex;justify-content:space-between;align-items:center;}
+  .topbar .logo{color:#5fa8e0;font-size:1.1rem;font-weight:700;}
+  .topbar .sub{color:#3a6a9a;font-size:.8rem;}
+  .month-nav{background:#0d1e30;border-bottom:1px solid #1a3a5c;padding:10px 28px;
+             display:flex;gap:8px;align-items:center;}
+  .month-btn{background:#1a3a5c;border:none;color:#7ab3e0;padding:5px 16px;border-radius:20px;font-size:.82rem;cursor:pointer;}
+  .month-btn.active,.month-btn:hover{background:#1e5a9a;color:#fff;}
+  .stat-strip{display:flex;gap:16px;padding:18px 28px;flex-wrap:wrap;}
+  .stat-box{background:linear-gradient(135deg,#142535,#0a1a28);border:1px solid #1e4a7a;
+            border-radius:10px;padding:14px 20px;min-width:160px;flex:1;}
+  .stat-box .lbl{color:#4a8ab0;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;}
+  .stat-box .val{font-size:1.8rem;font-weight:700;margin-top:4px;}
+  .emp-card{background:#0f1e2e;border:1px solid #1a3355;border-radius:12px;
+            margin:0 20px 20px;overflow:hidden;}
+  .emp-header{background:linear-gradient(90deg,#0d2a45,#091a2e);padding:14px 20px;
+              display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;}
+  .emp-name{font-size:1.05rem;font-weight:700;color:#7ab3e0;}
+  .emp-meta{font-size:.78rem;color:#5a8ab0;margin-top:2px;}
+  .emp-body{padding:16px 20px;}
+  .section-hdr{color:#4a8ab0;font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;
+               margin-bottom:8px;border-bottom:1px solid #1a3355;padding-bottom:4px;}
+  .stat-pill{display:inline-block;background:#0d2035;border:1px solid #1e3a5f;
+             border-radius:8px;padding:6px 12px;margin:3px;font-size:.82rem;text-align:center;}
+  .stat-pill .p-lbl{color:#4a8ab0;font-size:.68rem;display:block;}
+  .stat-pill .p-val{color:#dde6f0;font-weight:600;}
+  .bar-wrap{background:#0d2035;border-radius:6px;height:20px;overflow:hidden;display:flex;}
+  .bar-work{background:#1a7a3c;}
+  .bar-comms{background:#1a4a7a;}
+  .bar-nonwork{background:#7a1a1a;}
+  .bar-lbl{font-size:.72rem;margin-top:4px;}
+  .app-chip{display:inline-block;background:#132030;border:1px solid #1e4060;
+            border-radius:6px;padding:3px 10px;margin:2px;font-size:.78rem;color:#a0c8e0;}
+  .app-chip .app-dur{color:#4a8ab0;margin-left:4px;}
+  .alert-row{display:flex;align-items:center;background:#0d2035;border-radius:6px;
+             padding:6px 12px;margin:3px 0;font-size:.8rem;}
+  .alert-row .plat{font-weight:600;min-width:110px;}
+  .alert-row .dur{color:#5a9ab0;margin-left:8px;}
+  .risk-HIGH{color:#ef4444;background:#2a0a0a;border:1px solid #5a1a1a;
+             padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:700;}
+  .risk-MEDIUM{color:#f59e0b;background:#2a1a00;border:1px solid #5a3a00;
+               padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:700;}
+  .risk-LOW{color:#22c55e;background:#0a2a0a;border:1px solid #1a4a1a;
+            padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:700;}
+  .no-alert{color:#2a5a3a;font-size:.8rem;font-style:italic;}
+  .badge-days{background:#1a4a7a;color:#7ab3e0;padding:3px 10px;border-radius:12px;font-size:.78rem;}
+  .export-btn{background:#1a3a5c;border:1px solid #2a5a8c;color:#7ab3e0;
+              padding:6px 18px;border-radius:8px;font-size:.82rem;cursor:pointer;text-decoration:none;}
+  .export-btn:hover{background:#1e5a9a;color:#fff;}
+  @media print{.month-nav,.export-btn,.topbar{display:none!important;}.emp-card{break-inside:avoid;}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div class="logo"><i class="fa fa-shield-halved me-2" style="color:#3b82f6;"></i>{{ company }}</div>
+    <div class="sub">Monthly Summary Report — {{ month_label }}</div>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <a href="/" class="export-btn"><i class="fa fa-gauge me-1"></i>Live Dashboard</a>
+    <a href="#" onclick="window.print()" class="export-btn"><i class="fa fa-print me-1"></i>Print / PDF</a>
+  </div>
+</div>
+
+<!-- Month selector -->
+<div class="month-nav">
+  <span style="color:#3a6a9a;font-size:.78rem;margin-right:4px;"><i class="fa fa-calendar me-1"></i>Month:</span>
+  {% for m in months %}
+  <a href="/monthly/{{ m.val }}" class="month-btn {% if m.val == month_str %}active{% endif %}">{{ m.label }}</a>
+  {% endfor %}
+</div>
+
+<!-- Stats strip -->
+<div class="stat-strip">
+  <div class="stat-box">
+    <div class="lbl"><i class="fa fa-users me-1"></i>Employees</div>
+    <div class="val text-info">{{ employees|length }}</div>
+  </div>
+  <div class="stat-box">
+    <div class="lbl"><i class="fa fa-clock me-1"></i>Total Active Hrs</div>
+    <div class="val" style="color:#22c55e;">{{ total_active }}</div>
+  </div>
+  <div class="stat-box">
+    <div class="lbl"><i class="fa fa-calendar-check me-1"></i>Avg Days Worked</div>
+    <div class="val" style="color:#60a5fa;">{{ avg_days }}</div>
+  </div>
+  <div class="stat-box">
+    <div class="lbl"><i class="fa fa-triangle-exclamation me-1"></i>Social Media Alerts</div>
+    <div class="val" style="color:#ef4444;">{{ social_count }}</div>
+  </div>
+  <div class="stat-box">
+    <div class="lbl"><i class="fa fa-share-nodes me-1"></i>File Share Alerts</div>
+    <div class="val" style="color:#f59e0b;">{{ fileshare_count }}</div>
+  </div>
+</div>
+
+<!-- Employee cards -->
+{% for e in employees %}
+<div class="emp-card">
+  <div class="emp-header">
+    <div>
+      <div class="emp-name">
+        <i class="fa fa-user-circle me-2" style="color:#3b82f6;"></i>{{ e.username }}
+        <span class="badge-days ms-2">{{ e.days_worked }} days</span>
+        {% if e.has_social %}<span class="ms-2" style="color:#ef4444;font-size:.75rem;"><i class="fa fa-triangle-exclamation me-1"></i>Social Alert</span>{% endif %}
+        {% if e.has_fileshare %}<span class="ms-2" style="color:#f59e0b;font-size:.75rem;"><i class="fa fa-share-nodes me-1"></i>File Alert</span>{% endif %}
+      </div>
+      <div class="emp-meta">
+        <i class="fa fa-desktop me-1"></i>{{ e.computer }}
+        &nbsp;|&nbsp;<i class="fa fa-barcode me-1"></i>{{ e.serial }}
+        &nbsp;|&nbsp;<i class="fa fa-location-dot me-1"></i>{{ e.location }}
+        &nbsp;|&nbsp;<i class="fa fa-network-wired me-1"></i>{{ e.ip }}
+      </div>
+    </div>
+    <div class="d-flex gap-3 flex-wrap">
+      <div class="stat-pill">
+        <span class="p-lbl">Session Hrs</span>
+        <span class="p-val">{{ e.sess_hrs }}</span>
+      </div>
+      <div class="stat-pill">
+        <span class="p-lbl">Active Hrs</span>
+        <span class="p-val" style="color:#22c55e;">{{ e.active_hrs }}</span>
+      </div>
+      <div class="stat-pill">
+        <span class="p-lbl">Idle Hrs</span>
+        <span class="p-val" style="color:#f59e0b;">{{ e.idle_hrs }}</span>
+      </div>
+      <div class="stat-pill">
+        <span class="p-lbl">Avg/Day</span>
+        <span class="p-val" style="color:#60a5fa;">{{ e.avg_day }}</span>
+      </div>
+      <div class="stat-pill">
+        <span class="p-lbl">Active (dec)</span>
+        <span class="p-val">{{ e.active_dec }} hrs</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="emp-body">
+    <div class="row g-3">
+
+      <!-- Activity breakdown -->
+      <div class="col-md-4">
+        <div class="section-hdr"><i class="fa fa-chart-pie me-1"></i>Activity Breakdown</div>
+        <div class="bar-wrap mb-1">
+          <div class="bar-work"     style="width:{{ e.work_pct }}%"></div>
+          <div class="bar-comms"    style="width:{{ e.comms_pct }}%"></div>
+          <div class="bar-nonwork"  style="width:{{ e.nonwork_pct }}%"></div>
+        </div>
+        <div class="bar-lbl">
+          <span style="color:#22c55e;">█ Work {{ e.work_pct }}%</span>&nbsp;&nbsp;
+          <span style="color:#60a5fa;">█ Comms {{ e.comms_pct }}%</span>&nbsp;&nbsp;
+          <span style="color:#ef4444;">█ Non-Work {{ e.nonwork_pct }}%</span>
+        </div>
+      </div>
+
+      <!-- Top Applications -->
+      <div class="col-md-4">
+        <div class="section-hdr"><i class="fa fa-window-maximize me-1"></i>Top Applications</div>
+        {% for a in e.top5_apps %}
+        <div class="app-chip">
+          <span style="color:#3a6a9a;margin-right:4px;">{{ loop.index }}</span>
+          {{ a.app }}<span class="app-dur">{{ a.dur }}</span>
+        </div>
+        {% endfor %}
+        {% if not e.top5_apps %}<span class="no-alert">No app data</span>{% endif %}
+      </div>
+
+      <!-- Social Media Alerts -->
+      <div class="col-md-4">
+        <div class="section-hdr"><i class="fa fa-mobile-screen me-1"></i>Social Media Alert</div>
+        {% for s in e.social_alerts %}
+        <div class="alert-row">
+          <span class="plat" style="color:#e0a0a0;">{{ s.platform }}</span>
+          <span class="dur">{{ s.dur }}</span>
+          <span class="ms-auto risk-{{ s.risk }}">{{ s.risk }}</span>
+        </div>
+        {% endfor %}
+        {% if not e.social_alerts %}<div class="no-alert"><i class="fa fa-check me-1" style="color:#22c55e;"></i>No social media detected</div>{% endif %}
+      </div>
+
+      <!-- File Sharing Alerts -->
+      <div class="col-12">
+        <div class="section-hdr"><i class="fa fa-share-nodes me-1"></i>File Sharing Alert</div>
+        {% if e.fileshare_alerts %}
+        <div class="d-flex flex-wrap gap-1">
+          {% for f in e.fileshare_alerts %}
+          <div class="alert-row" style="min-width:220px;flex:1;">
+            <span class="plat" style="color:#e0c060;">{{ f.platform }}</span>
+            <span class="dur">{{ f.dur }}</span>
+            <span class="ms-auto risk-{{ f.risk }}">{{ f.risk }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <span class="no-alert"><i class="fa fa-check me-1" style="color:#22c55e;"></i>No file sharing activity detected</span>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+{% if not employees %}
+<div class="text-center text-muted py-5">
+  <i class="fa fa-database fa-2x mb-2 d-block"></i>
+  No data found for {{ month_label }}
+</div>
+{% endif %}
+
+<div style="text-align:center;color:#2a4a6a;font-size:.72rem;padding:20px;">
+  {{ company }} · Monthly Summary · {{ month_label }} · Generated {{ now }}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body></html>"""
+
+
+@app.route("/monthly")
+@app.route("/monthly/<month_str>")
+def monthly_summary(month_str=None):
+    if not month_str:
+        month_str = datetime.now().strftime("%Y-%m")
+
+    # Build month selector (last 6 months)
+    months = []
+    for i in range(6):
+        d = (datetime.now().replace(day=1) - timedelta(days=i*28)).replace(day=1)
+        months.append({"val": d.strftime("%Y-%m"), "label": d.strftime("%b %Y")})
+
+    try:
+        month_label = datetime.strptime(month_str, "%Y-%m").strftime("%B %Y")
+    except Exception:
+        month_label = month_str
+
+    employees = build_monthly_summary(month_str)
+
+    total_active_s  = sum(e["active_s"] for e in employees)
+    avg_days        = round(sum(e["days_worked"] for e in employees) / len(employees), 1) if employees else 0
+    social_count    = sum(1 for e in employees if e["has_social"])
+    fileshare_count = sum(1 for e in employees if e["has_fileshare"])
+
+    return render_template_string(
+        MONTHLY_HTML,
+        company=COMPANY,
+        month_str=month_str,
+        month_label=month_label,
+        months=months,
+        employees=employees,
+        total_active=fmt_secs(total_active_s),
+        avg_days=avg_days,
+        social_count=social_count,
+        fileshare_count=fileshare_count,
+        now=datetime.now().strftime("%Y-%m-%d %H:%M"),
+    )
+
+
 # ── MAIN ───────────────────────────────────────────────────────
 if __name__ == "__main__":
     init_db()
