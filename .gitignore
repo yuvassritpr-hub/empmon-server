@@ -1,0 +1,15 @@
+*.pfx
+*.cer
+empmon.db
+empmon.db-shm
+empmon.db-wal
+*.zip
+build/
+dist/
+*.spec
+__pycache__/
+*.pyc
+realtime/server/node_modules/
+realtime/client/node_modules/
+realtime/client/dist/
+C:\EmpMonitor/

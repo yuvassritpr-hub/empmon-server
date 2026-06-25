@@ -49,9 +49,16 @@ try:
 except ImportError:
     HAS_PSUTIL = False
 
+try:
+    import asyncio
+    from winsdk.windows.devices.geolocation import Geolocator, PositionAccuracy
+    HAS_WINSDK = True
+except ImportError:
+    HAS_WINSDK = False
+
 # ══════════════════════════════════════════════════════════
 #  CHANGE THIS TO YOUR SERVER PC'S IP ADDRESS
-SERVER_URL = "http://192.168.1.137:5000"   # ← Edit this
+SERVER_URL = "http://127.0.0.1:5050"   # ← Edit this (Node.js real-time server)
 # ══════════════════════════════════════════════════════════
 
 SCRIPTS_DIR      = r"C:\EmpMonitor"
@@ -147,6 +154,38 @@ def get_serial():
     return "N/A"
 
 
+def get_gps_area():
+    """Get precise area/locality name using Windows Location Service (WiFi/GPS)."""
+    if not HAS_WINSDK:
+        return None
+    try:
+        async def _fetch():
+            locator = Geolocator()
+            locator.desired_accuracy = PositionAccuracy.HIGH
+            pos = await locator.get_geoposition_async()
+            return pos.coordinate.point.position.latitude, pos.coordinate.point.position.longitude
+
+        lat, lon = asyncio.run(_fetch())
+
+        r = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={"lat": lat, "lon": lon, "format": "json", "zoom": 16},
+            headers={"User-Agent": "EmpMonV8-WSafe"}, timeout=6
+        ).json()
+        addr = r.get("address", {})
+        area = (addr.get("suburb") or addr.get("neighbourhood") or
+                addr.get("residential") or addr.get("road") or
+                addr.get("city_district") or "")
+        city = addr.get("city") or addr.get("town") or addr.get("village") or ""
+        if area and city:
+            return f"{area}, {city}", str(lat), str(lon)
+        elif city:
+            return city, str(lat), str(lon)
+    except Exception as e:
+        log(f"GPS location unavailable: {e}")
+    return None
+
+
 def get_location():
     global _loc_cache
     ip = "N/A"
@@ -154,6 +193,10 @@ def get_location():
         ip = requests.get("https://ipinfo.io/ip", timeout=4).text.strip()
     except Exception:
         pass
+
+    # NOTE: WiFi-based GPS location (get_gps_area) was tried but proved
+    # inaccurate in this region (off by several km) — using reliable
+    # IP-based city detection instead.
 
     try:
         d = requests.get("http://ip-api.com/json", timeout=6).json()
@@ -222,16 +265,136 @@ def send_app_event(app_data):
     _enqueue("app_event", app_data)
 
 
+def detect_usb_drives():
+    """Detect connected USB/removable storage drives."""
+    drives = []
+    try:
+        if HAS_PSUTIL:
+            for part in psutil.disk_partitions(all=False):
+                opts = part.opts or ""
+                if "removable" in opts.lower() or "cdrom" in opts.lower():
+                    try:
+                        usage = psutil.disk_usage(part.mountpoint)
+                        drives.append({
+                            "drive":   part.device,
+                            "label":   part.mountpoint,
+                            "size_gb": round(usage.total / 1e9, 2),
+                        })
+                    except Exception:
+                        pass
+        if not drives:
+            import string
+            for letter in string.ascii_uppercase:
+                drv = f"{letter}:\\"
+                try:
+                    dtype = ctypes.windll.kernel32.GetDriveTypeW(drv)
+                    if dtype == 2:  # DRIVE_REMOVABLE
+                        usage = psutil.disk_usage(drv) if HAS_PSUTIL else None
+                        drives.append({
+                            "drive": drv, "label": "",
+                            "size_gb": round(usage.total / 1e9, 2) if usage else 0,
+                        })
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return drives
+
+
+def detect_vpn():
+    """Detect if employee is connected to VPN."""
+    vpn_info = {"connected": False, "software": [], "adapter": ""}
+
+    # 1. Check running VPN processes
+    VPN_PROCS = {
+        "vpnui.exe":        "Cisco AnyConnect",
+        "vpnclient.exe":    "Cisco VPN",
+        "forticlient.exe":  "FortiClient VPN",
+        "fortivpn.exe":     "FortiClient VPN",
+        "openvpn.exe":      "OpenVPN",
+        "openvpn-gui.exe":  "OpenVPN",
+        "nordvpn.exe":      "NordVPN",
+        "expressvpn.exe":   "ExpressVPN",
+        "surfshark.exe":    "Surfshark VPN",
+        "pvpn-cli.exe":     "ProtonVPN",
+        "protonvpn.exe":    "ProtonVPN",
+        "windscribe.exe":   "Windscribe VPN",
+        "pulsesecure.exe":  "Pulse Secure VPN",
+        "globalprotect.exe":"GlobalProtect VPN",
+        "zscaler.exe":      "Zscaler VPN",
+        "softether.exe":    "SoftEther VPN",
+        "mstsc.exe":        "Remote Desktop (RDP)",
+        "anydesk.exe":      "AnyDesk Remote",
+        "rustdesk.exe":     "RustDesk Remote",
+        "teamviewer.exe":   "TeamViewer Remote",
+    }
+    try:
+        if HAS_PSUTIL:
+            for proc in psutil.process_iter(["name"]):
+                pname = (proc.info["name"] or "").lower()
+                for exe, label in VPN_PROCS.items():
+                    if exe.lower() == pname:
+                        vpn_info["software"].append(label)
+                        vpn_info["connected"] = True
+    except Exception:
+        pass
+
+    # 2. Check network adapters for VPN virtual adapters
+    VPN_ADAPTER_KEYS = ["vpn","tap","tun","virtual","nordlynx","wireguard",
+                        "proton","forticlient","cisco","pulse","zscaler",
+                        "anyconnect","globalprotect"]
+    try:
+        if HAS_PSUTIL:
+            for iface, addrs in psutil.net_if_stats().items():
+                ifl = iface.lower()
+                for kw in VPN_ADAPTER_KEYS:
+                    if kw in ifl and addrs.isup:
+                        vpn_info["connected"] = True
+                        if iface not in vpn_info["adapter"]:
+                            vpn_info["adapter"] = iface
+                        break
+    except Exception:
+        pass
+
+    return vpn_info
+
+
+def get_disk_usage():
+    """Return list of disk usage dicts for all drives."""
+    disks = []
+    try:
+        if HAS_PSUTIL:
+            for part in psutil.disk_partitions(all=False):
+                try:
+                    usage = psutil.disk_usage(part.mountpoint)
+                    disks.append({
+                        "drive":    part.device[:2] if part.device else "C:",
+                        "total_gb": round(usage.total / 1e9, 1),
+                        "used_gb":  round(usage.used  / 1e9, 1),
+                        "free_gb":  round(usage.free  / 1e9, 1),
+                        "pct_used": round(usage.percent, 1),
+                    })
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return disks
+
+
 def send_heartbeat():
     """Lightweight keep-alive so dashboard shows accurate online status."""
     if not HAS_REQUESTS:
         return
     ip, city, reg, coun, lat, lon = _loc_cache
     try:
+        vpn = detect_vpn()
         requests.post(f"{SERVER_URL}/api/heartbeat", json={
             "username": USER, "computer": PC,
             "serial":   SERIAL,
-            "ip": ip, "city": city, "region": reg, "country": coun
+            "ip": ip, "city": city, "region": reg, "country": coun,
+            "disks":      get_disk_usage(),
+            "vpn":        vpn,
+            "usb_drives": detect_usb_drives(),
         }, timeout=6)
     except Exception:
         pass
