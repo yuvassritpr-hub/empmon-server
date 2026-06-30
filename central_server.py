@@ -18,7 +18,12 @@ RUN:
 """
 
 import os, json, sqlite3, socket
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+IST = timezone(timedelta(hours=5, minutes=30))
+
+def now_ist():
+    return datetime.now(IST).replace(tzinfo=None)
 from collections import defaultdict, Counter
 from flask import Flask, request, jsonify, render_template_string
 
@@ -160,7 +165,7 @@ def api_event():
             if not data.get(f):
                 return jsonify({"status": "error", "msg": f"missing {f}"}), 400
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = now_ist().strftime("%Y-%m-%d %H:%M:%S")
         with get_db() as conn:
             conn.execute("""
                 INSERT INTO raw_log
@@ -196,7 +201,7 @@ def api_app_event():
             if not data.get(f):
                 return jsonify({"status": "error", "msg": f"missing {f}"}), 400
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = now_ist().strftime("%Y-%m-%d %H:%M:%S")
         dur_s = parse_duration(data.get("duration", data.get("duration_sec", 0)))
 
         with get_db() as conn:
@@ -226,7 +231,7 @@ def api_batch():
         if not data:
             return jsonify({"status": "error", "msg": "no JSON"}), 400
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = now_ist().strftime("%Y-%m-%d %H:%M:%S")
         inserted = 0
         with get_db() as conn:
             for ev in data.get("events", []):
@@ -276,7 +281,7 @@ def api_heartbeat():
         data = request.get_json(force=True)
         if not data or not data.get("username"):
             return jsonify({"status": "error"}), 400
-        now = datetime.now()
+        now = now_ist()
         with get_db() as conn:
             conn.execute("""
                 INSERT INTO raw_log
@@ -349,8 +354,8 @@ def api_heartbeat():
 
 # ── DASHBOARD DATA BUILDERS ────────────────────────────────────
 def get_all_employees_today():
-    today = datetime.now().strftime("%Y-%m-%d")
-    this_month = datetime.now().strftime("%Y-%m")
+    today = now_ist().strftime("%Y-%m-%d")
+    this_month = now_ist().strftime("%Y-%m")
 
     with get_db() as conn:
         # Get distinct employees (any time)
@@ -434,7 +439,7 @@ def get_all_employees_today():
             # Status — walk events newest→oldest to find last meaningful state
             status = "Offline"
             if last_event_dt:
-                mins_ago = (datetime.now() - last_event_dt).total_seconds() / 60
+                mins_ago = (now_ist() - last_event_dt).total_seconds() / 60
                 last_ev = today_rows[-1]["event"].upper() if today_rows else ""
                 if last_ev in ("LOGOUT(SHUTDOWN)", "LOGOUT(LOGOFF)"):
                     status = "Offline"
@@ -544,8 +549,8 @@ def get_all_employees_today():
 
 
 def get_employee_detail(username, computer):
-    this_month = datetime.now().strftime("%Y-%m")
-    today = datetime.now().strftime("%Y-%m-%d")
+    this_month = now_ist().strftime("%Y-%m")
+    today = now_ist().strftime("%Y-%m-%d")
 
     with get_db() as conn:
         today_raw = conn.execute("""
@@ -599,7 +604,7 @@ def get_employee_detail(username, computer):
 
     status = "Offline"
     if last_event_dt:
-        mins_ago = (datetime.now() - last_event_dt).total_seconds() / 60
+        mins_ago = (now_ist() - last_event_dt).total_seconds() / 60
         last_ev = today_raw[-1]["event"].upper() if today_raw else ""
         if last_ev in ("LOGOUT(SHUTDOWN)", "LOGOUT(LOGOFF)", "LOGOUT(LOCK)", "LOGOUT(SCREEN-OFF)"):
             status = "Offline"
@@ -663,7 +668,7 @@ def get_employee_detail(username, computer):
             if apn:
                 app_month[apn] += dur_s
 
-    now   = datetime.now()
+    now   = now_ist()
     first = now.replace(day=1)
     cal   = []
     for i in range(now.day):
@@ -1214,8 +1219,8 @@ DETAIL_HTML = """<!DOCTYPE html>
 def index():
     try:
         rows, online, idle_cnt, offline, total_active = get_all_employees_today()
-        today   = datetime.now().strftime("%Y-%m-%d")
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        today   = now_ist().strftime("%Y-%m-%d")
+        now_str = now_ist().strftime("%Y-%m-%d %H:%M:%S")
         return render_template_string(
             INDEX_HTML,
             company=COMPANY, refresh=REFRESH_S, now=now_str, today=today,
@@ -1232,7 +1237,7 @@ def index():
 @app.route("/employee/<username>/<computer>")
 def employee_detail(username, computer):
     e       = get_employee_detail(username, computer)
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_str = now_ist().strftime("%Y-%m-%d %H:%M:%S")
     return render_template_string(
         DETAIL_HTML, company=COMPANY, refresh=REFRESH_S, now=now_str, e=e)
 
@@ -1241,7 +1246,7 @@ def employee_detail(username, computer):
 def api_summary():
     rows, online, idle_cnt, offline, total_active = get_all_employees_today()
     return jsonify({
-        "generated": datetime.now().isoformat(),
+        "generated": now_ist().isoformat(),
         "total": len(rows), "online": online,
         "idle": idle_cnt, "offline": offline,
         "total_active_today_hrs": fmt_dec(total_active),
@@ -2026,12 +2031,12 @@ MONTHLY_HTML = """<!DOCTYPE html>
 @app.route("/monthly/<month_str>")
 def monthly_summary(month_str=None):
     if not month_str:
-        month_str = datetime.now().strftime("%Y-%m")
+        month_str = now_ist().strftime("%Y-%m")
 
     # Build month selector (last 6 months)
     months = []
     for i in range(6):
-        d = (datetime.now().replace(day=1) - timedelta(days=i*28)).replace(day=1)
+        d = (now_ist().replace(day=1) - timedelta(days=i*28)).replace(day=1)
         months.append({"val": d.strftime("%Y-%m"), "label": d.strftime("%b %Y")})
 
     try:
@@ -2057,7 +2062,7 @@ def monthly_summary(month_str=None):
         avg_days=avg_days,
         social_count=social_count,
         fileshare_count=fileshare_count,
-        now=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        now=now_ist().strftime("%Y-%m-%d %H:%M"),
     )
 
 
