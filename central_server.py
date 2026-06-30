@@ -1198,17 +1198,21 @@ DETAIL_HTML = """<!DOCTYPE html>
 # ── ROUTES ─────────────────────────────────────────────────────
 @app.route("/")
 def index():
-    rows, online, idle_cnt, offline, total_active = get_all_employees_today()
-    today   = datetime.now().strftime("%Y-%m-%d")
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    return render_template_string(
-        INDEX_HTML,
-        company=COMPANY, refresh=REFRESH_S, now=now_str, today=today,
-        total=len(rows), online=online, idle=idle_cnt,
-        employees=list(enumerate(rows, 1)),
-        total_active=fmt_secs(total_active),
-        db_path=DB_PATH, idle_min=IDLE_MIN, offline_min=OFFLINE_MIN,
-    )
+    try:
+        rows, online, idle_cnt, offline, total_active = get_all_employees_today()
+        today   = datetime.now().strftime("%Y-%m-%d")
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return render_template_string(
+            INDEX_HTML,
+            company=COMPANY, refresh=REFRESH_S, now=now_str, today=today,
+            total=len(rows), online=online, idle=idle_cnt,
+            employees=list(enumerate(rows, 1)),
+            total_active=fmt_secs(total_active),
+            db_path=DB_PATH, idle_min=IDLE_MIN, offline_min=OFFLINE_MIN,
+        )
+    except Exception as e:
+        import traceback
+        return f"<pre>ERROR: {traceback.format_exc()}</pre>", 500
 
 
 @app.route("/employee/<username>/<computer>")
