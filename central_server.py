@@ -1473,11 +1473,50 @@ def build_monthly_summary(month_str):
                 daily_events[d]["lock"].append(r["time"])
             elif ev == "LOGIN(UNLOCK)":
                 daily_events[d]["unlock"].append(r["time"])
-        daily_breakdown = [
-            {"date": d, "login": v["login"], "shutdown": v["shutdown"],
-             "lock_times": ", ".join(v["lock"][:3]), "unlock_times": ", ".join(v["unlock"][:3])}
-            for d, v in sorted(daily_events.items())
-        ]
+        # Per-day active/work/comms secs from app_log
+        day_active = defaultdict(int)
+        day_work   = defaultdict(int)
+        day_comms  = defaultdict(int)
+        day_first  = {}
+        day_last   = {}
+        for ar in app_rows:
+            if (ar["state"] or "active").lower() == "active":
+                dur = ar["duration_sec"] or 0
+                day_active[ar["date"]] += dur
+                cat = classify(ar["app"] or "", ar["window_title"] or "")
+                if cat == "work":  day_work[ar["date"]]  += dur
+                elif cat == "comms": day_comms[ar["date"]] += dur
+        for r in raw:
+            d = r["date"]
+            if d not in day_first: day_first[d] = r["time"]
+            day_last[d] = r["time"]
+
+        daily_breakdown = []
+        for d, v in sorted(daily_events.items()):
+            active_s = day_active.get(d, 0)
+            session_s = 0
+            if d in day_first and d in day_last and day_first[d] != day_last[d]:
+                try:
+                    s  = datetime.strptime(d+" "+day_first[d], "%Y-%m-%d %H:%M:%S")
+                    en = datetime.strptime(d+" "+day_last[d],  "%Y-%m-%d %H:%M:%S")
+                    session_s = max(0, (en - s).total_seconds())
+                except Exception:
+                    pass
+            idle_s = max(0, session_s - active_s)
+            daily_breakdown.append({
+                "date":        d,
+                "login":       v["login"],
+                "shutdown":    v["shutdown"],
+                "lockCount":   len(v["lock"]),
+                "unlockCount": len(v["unlock"]),
+                "lockTimes":   ", ".join(v["lock"][:3]),
+                "unlockTimes": ", ".join(v["unlock"][:3]),
+                "workSecs":    day_work.get(d, 0),
+                "commsSecs":   day_comms.get(d, 0),
+                "activeSecs":  active_s,
+                "idleSecs":    idle_s,
+                "sessionSecs": session_s,
+            })
 
         # External / personal email detection
         external_email = defaultdict(int)
@@ -1630,22 +1669,33 @@ def build_monthly_summary(month_str):
             "work_pct":       work_pct,
             "comms_pct":      comms_pct,
             "nonwork_pct":    nonwork_pct,
+            "workPct":        work_pct,
+            "commsPct":       comms_pct,
+            "nonworkPct":     nonwork_pct,
             "top5_apps":      top5_apps,
             "top10_apps":     top10_apps,
+            "topApps":        top10_apps,
             "work_detail":    work_detail,
             "comms_detail":   comms_detail,
             "social_alerts":  social_alert,
+            "socialAlerts":   social_alert,
             "fileshare_alerts": fileshare_alert,
+            "fileshareAlerts":  fileshare_alert,
             "has_social":     len(social_alert) > 0,
             "has_fileshare":  len(fileshare_alert) > 0,
             "disks":          disks,
             "disk_alert":     any(d["alert"] != "OK" for d in disks),
             "vpn_detected":   len(vpn_rows) > 0,
             "vpn_software":   vpn_rows[0]["software"] if vpn_rows else "",
+            "dailyBreakdown": daily_breakdown,
             "daily_breakdown": daily_breakdown,
             "external_email_alerts": external_email_alert,
             "has_external_email": len(external_email_alert) > 0,
             "usb_alerts":     usb_alerts,
+            "usbAlerts":      usb_alerts,
+            "external_email_alerts": external_email_alert,
+            "externalEmailAlerts":   external_email_alert,
+            "activeHrs":      fmt_secs(active_s),
             "has_usb":        len(usb_alerts) > 0,
             "active_s":       active_s,
         })
@@ -2057,6 +2107,12 @@ MONTHLY_HTML = """<!DOCTYPE html>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body></html>"""
+
+
+@app.route("/api/monthly/<month_str>")
+def api_monthly(month_str):
+    data = build_monthly_summary(month_str)
+    return jsonify(data)
 
 
 @app.route("/monthly")

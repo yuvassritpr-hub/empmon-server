@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const API_URL = "http://localhost:5050";
+const API_URL = "https://empmon-server.onrender.com";
 
 function fmt(s) {
   if (!s || s === 0) return "—";
