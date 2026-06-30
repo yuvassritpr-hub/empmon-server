@@ -123,9 +123,11 @@ def init_db():
 # ── HELPERS ────────────────────────────────────────────────────
 def fmt_secs(s):
     if not s or s <= 0:
-        return "0h 00m"
-    h, m = divmod(int(s // 60), 60)
-    return f"{h}h {m:02d}m"
+        return "0h 00m 00s"
+    s = int(s)
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    return f"{h}h {m:02d}m {sec:02d}s"
 
 
 def fmt_dec(s):
@@ -1397,7 +1399,7 @@ def build_monthly_summary(month_str):
         for r in raw:
             ev = r["event"].upper()
             d  = r["date"]
-            if ev == "LOGIN" and daily_events[d]["login"] == "--":
+            if ev.startswith("LOGIN") and daily_events[d]["login"] == "--":
                 daily_events[d]["login"] = r["time"]
             elif ev in ("LOGOUT(SHUTDOWN)", "LOGOUT(LOGOFF)"):
                 daily_events[d]["shutdown"] = r["time"]
