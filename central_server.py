@@ -2033,8 +2033,9 @@ def monthly_summary(month_str=None):
 
 
 # ── MAIN ───────────────────────────────────────────────────────
+init_db()   # must run at import time so gunicorn workers have tables ready
+
 if __name__ == "__main__":
-    init_db()
     try:
         local_ip = socket.gethostbyname(socket.gethostname())
     except Exception:
