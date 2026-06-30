@@ -163,24 +163,24 @@ function EmployeeCard({ e }) {
       <div className="detail-body">
         {tab === "browser" && (
           <div className="browser-sites">
-            {e.topSites && e.topSites.length > 0 ? (
+            {e.topTabs && e.topTabs.length > 0 ? (
               <>
-                <div className="browser-header">Top websites visited today (Chrome / Edge)</div>
-                {e.topSites.map((s, i) => {
-                  const max = e.topSites[0]?.secs || 1;
+                <div className="browser-header" style={{ marginBottom: 8 }}>🗂 Active Tab Time — Chrome / Edge / Firefox</div>
+                {e.topTabs.map((s, i) => {
+                  const max = e.topTabs[0]?.secs || 1;
                   const pct = Math.round((s.secs / max) * 100);
-                  const isWork = /apollo|salesforce|hubspot|linkedin|zoho|pipedrive|notion|jira|confluence|github|gitlab|office|outlook|teams|docs\.google|sheets\.google|drive\.google|meet\.google|zoom|webex|monday|asana|trello|slack/.test(s.domain);
-                  const isSocial = /youtube|instagram|facebook|twitter|tiktok|snapchat|reddit|netflix|hotstar|spotify|discord|whatsapp|telegram/.test(s.domain);
-                  const barColor = isSocial ? "linear-gradient(90deg,#ef4444,#f87171)" : isWork ? "linear-gradient(90deg,#6c8cff,#818cf8)" : "linear-gradient(90deg,#f59e0b,#fbbf24)";
+                  const tl = s.title.toLowerCase();
+                  const isWork = /apollo|salesforce|hubspot|linkedin|zoho|pipedrive|notion|jira|confluence|github|gitlab|office|outlook|teams|meet|zoom|webex|monday|asana|trello|slack|sharepoint|powerbi|erp|crm/.test(tl);
+                  const isSocial = /youtube|instagram|facebook|twitter|tiktok|snapchat|reddit|netflix|hotstar|spotify|discord|whatsapp|telegram|reels|shorts/.test(tl);
+                  const barColor = isSocial ? "linear-gradient(90deg,#ef4444,#f87171)" : isWork ? "linear-gradient(90deg,#6c8cff,#818cf8)" : "linear-gradient(90deg,#06b6d4,#22d3ee)";
                   return (
                     <div key={i} className="aw-app-row">
                       <div className="aw-app-header">
                         <span className="aw-rank">{i + 1}</span>
-                        <span className="aw-name" style={{ display:"flex", alignItems:"center", gap:6 }}>
-                          <img src={`https://www.google.com/s2/favicons?domain=${s.domain}&sz=16`} width={16} height={16} style={{ borderRadius:3 }} onError={(ev)=>ev.target.style.display="none"} />
-                          {s.domain}
-                          {isSocial && <span style={{ fontSize:"0.65rem", background:"rgba(239,68,68,.15)", color:"#ef4444", borderRadius:4, padding:"1px 5px" }}>⚠ Non-work</span>}
-                          {isWork && <span style={{ fontSize:"0.65rem", background:"rgba(108,140,255,.15)", color:"#6c8cff", borderRadius:4, padding:"1px 5px" }}>✓ Work</span>}
+                        <span className="aw-name" style={{ display:"flex", alignItems:"center", gap:6, flex:1, minWidth:0 }}>
+                          <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.title}</span>
+                          {isSocial && <span style={{ flexShrink:0, fontSize:"0.62rem", background:"rgba(239,68,68,.15)", color:"#ef4444", borderRadius:4, padding:"1px 5px" }}>⚠ Non-work</span>}
+                          {isWork && <span style={{ flexShrink:0, fontSize:"0.62rem", background:"rgba(108,140,255,.15)", color:"#6c8cff", borderRadius:4, padding:"1px 5px" }}>✓ Work</span>}
                         </span>
                         <span className="aw-time">{fmtSecs(s.secs)}</span>
                       </div>
@@ -191,7 +191,7 @@ function EmployeeCard({ e }) {
                   );
                 })}
               </>
-            ) : <div className="no-data">No browser data yet — will appear on next heartbeat (every 5 min)</div>}
+            ) : <div className="no-data">No browser tab data yet — opens automatically as employees browse</div>}
           </div>
         )}
         {tab === "work" && (

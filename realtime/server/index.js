@@ -103,6 +103,22 @@ function buildLiveSnapshot() {
       "SELECT app, window_title, SUM(duration_sec) as total FROM app_log WHERE username=? AND computer=? AND date=? AND state='active' GROUP BY app ORDER BY total DESC LIMIT 20"
     ).all(e.username, e.computer, t);
 
+    // Browser tab tracking — parse window titles from Chrome/Edge/Firefox/Brave
+    const browserApps = /chrome|msedge|edge|firefox|brave|opera/i;
+    const tabRaws = db.prepare(
+      "SELECT app, window_title, duration_sec FROM app_log WHERE username=? AND computer=? AND date=? AND state='active'"
+    ).all(e.username, e.computer, t);
+    const tabMap = {};
+    for (const r of tabRaws) {
+      if (!browserApps.test(r.app || "")) continue;
+      const title = (r.window_title || "").trim();
+      // Strip browser suffix: "Page Title - Google Chrome" → "Page Title"
+      const clean = title.replace(/\s*[-–|]\s*(Google Chrome|Microsoft Edge|Mozilla Firefox|Brave|Opera|Chrome).*$/i, "").trim();
+      if (!clean || clean.length < 3 || /^(new tab|newtab)$/i.test(clean)) continue;
+      tabMap[clean] = (tabMap[clean] || 0) + (r.duration_sec || 0);
+    }
+    const topTabs = Object.entries(tabMap).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([title,secs])=>({title,secs}));
+
     // Work / Comms / Non-work classification
     let workSecs = 0, commsSecs = 0, nonworkSecs = 0;
     const workApps = {}, commsApps = {};
@@ -162,6 +178,7 @@ function buildLiveSnapshot() {
       workApps: workAppList,
       commsApps: commsAppList,
       topSites,
+      topTabs,
     };
   });
 }
