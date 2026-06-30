@@ -1490,6 +1490,20 @@ def build_monthly_summary(month_str):
             d = r["date"]
             if d not in day_first: day_first[d] = r["time"]
             day_last[d] = r["time"]
+            # Ensure date exists in daily_events even if only HEARTBEAT
+            if d not in daily_events:
+                daily_events[d] = {"login": "--", "shutdown": "--", "lock": [], "unlock": []}
+        # Also create daily entries from app_log dates (for employees with no raw LOGIN)
+        for ar in app_rows:
+            d = ar["date"]
+            if d not in daily_events:
+                daily_events[d] = {"login": "--", "shutdown": "--", "lock": [], "unlock": []}
+            # Use earliest app start as login if no LOGIN event recorded
+            t = ar["start_time"] or ""
+            if t and daily_events[d]["login"] == "--":
+                daily_events[d]["login"] = t
+            elif t and daily_events[d]["login"] > t:
+                daily_events[d]["login"] = t
 
         daily_breakdown = []
         for d, v in sorted(daily_events.items()):
