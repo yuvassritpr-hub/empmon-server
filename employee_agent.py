@@ -197,15 +197,8 @@ def reverse_geocode_area(lat, lon):
             timeout=6
         ).json()
         addr = r.get("address", {})
-        area = (addr.get("suburb") or addr.get("neighbourhood") or
-                addr.get("residential") or addr.get("city_district") or
-                addr.get("town") or addr.get("village") or "")
-        city = addr.get("city") or addr.get("county") or ""
-        if area and city:
-            return f"{area}, {city}"
-        elif area:
-            return area
-        elif city:
+        city = addr.get("city") or addr.get("town") or addr.get("county") or ""
+        if city:
             return city
     except Exception:
         pass
