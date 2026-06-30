@@ -457,7 +457,7 @@ def get_all_employees_today():
                 city = r["city"] or "N/A"
                 reg  = r["region"] or ""
                 if city and city != "N/A":
-                    location = city
+                    location = f"{city}, {reg}".strip(", ")
                 ip = r["ip"] or "N/A"
                 if ip and "." in ip and ip != "N/A":
                     ip_addr = ip
@@ -625,7 +625,7 @@ def get_employee_detail(username, computer):
         city = r["city"] or "N/A"
         reg  = r["region"] or ""
         if city != "N/A":
-            location = city
+            location = f"{city}, {reg}".strip(", ")
         ip = r["ip"] or "N/A"
         if ip and "." in ip and ip != "N/A":
             ip_addr = ip
@@ -1560,7 +1560,7 @@ def build_monthly_summary(month_str):
             city = r["city"] or "N/A"
             reg  = r["region"] or ""
             if city and city != "N/A":
-                location = city
+                location = f"{city}, {reg}".strip(", ")
             ip = r["ip"] or "N/A"
             if ip and "." in ip and ip != "N/A":
                 ip_addr = ip
