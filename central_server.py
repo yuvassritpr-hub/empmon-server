@@ -1240,6 +1240,17 @@ def api_status():
     return jsonify({"status": "ok", "server": COMPANY, "version": "8.0"})
 
 
+@app.route("/api/clear_all", methods=["POST"])
+def clear_all():
+    with get_db() as conn:
+        conn.execute("DELETE FROM raw_log")
+        conn.execute("DELETE FROM app_log")
+        conn.execute("DELETE FROM disk_log")
+        conn.execute("DELETE FROM vpn_log")
+        conn.execute("DELETE FROM usb_log")
+    return jsonify({"status": "ok", "message": "All data cleared"})
+
+
 # ── KEYWORD MAPS ───────────────────────────────────────────────
 SOCIAL_MAP = {
     "youtube":"YouTube","instagram":"Instagram","facebook":"Facebook",
