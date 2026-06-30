@@ -231,7 +231,7 @@ def get_location():
                 area_city = reverse_geocode_area(lat, lon)
             city = area_city or d["city"]
             result = (d.get("query", ip), city,
-                      d.get("regionName", "N/A"), d.get("countryCode", "IN"),
+                      d.get("city", "N/A"), d.get("countryCode", "IN"),
                       lat, lon)
             _loc_cache = result
             save_loc_cache(result)
@@ -249,7 +249,7 @@ def get_location():
             area_city = reverse_geocode_area(lat, lon)
         city = area_city or d.get("city", "N/A")
         result = (d.get("ip", ip), city,
-                  d.get("region", "N/A"), d.get("country", "IN"),
+                  d.get("city", "N/A"), d.get("country", "IN"),
                   lat, lon)
         if result[1] not in ("N/A", ""):
             _loc_cache = result

@@ -1,4 +1,4 @@
-"""
+﻿"""
 EmpMon V8 - CENTRAL SERVER
 ===========================
 Receives data from ALL employee PCs via HTTP API.
@@ -7,7 +7,7 @@ Serves a live web dashboard showing all employees.
 
 HOW IT WORKS:
   1. Run this on the IT/HR admin PC (or any always-on machine).
-  2. Deploy employee_agent.py on each employee PC — it POSTs data here.
+  2. Deploy employee_agent.py on each employee PC â€” it POSTs data here.
   3. Open http://THIS-PC-IP:5000 in any browser to see the dashboard.
 
 INSTALL:
@@ -27,19 +27,19 @@ def now_ist():
 from collections import defaultdict, Counter
 from flask import Flask, request, jsonify, render_template_string
 
-# ── CONFIG ─────────────────────────────────────────────────────
+# â”€â”€ CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 COMPANY      = "W-SAFE REINSURANCE"
 PORT         = 5000
 DB_PATH      = os.path.join(os.path.dirname(__file__), "empmon.db")
 IDLE_MIN     = 10
 OFFLINE_MIN  = 30
 REFRESH_S    = 60
-# ───────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app = Flask(__name__)
 
 
-# ── DATABASE ───────────────────────────────────────────────────
+# â”€â”€ DATABASE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -136,7 +136,7 @@ def init_db():
     print(f"[DB] Database ready: {DB_PATH}")
 
 
-# ── HELPERS ────────────────────────────────────────────────────
+# â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def fmt_secs(s):
     if not s or s <= 0:
         return "0h 00m 00s"
@@ -162,7 +162,7 @@ def parse_duration(val):
         return 0
 
 
-# ── API ENDPOINTS ──────────────────────────────────────────────
+# â”€â”€ API ENDPOINTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/api/event", methods=["POST"])
 def api_event():
     """Employee PC posts a login/logout event here."""
@@ -287,7 +287,7 @@ def api_batch():
 
 @app.route("/api/heartbeat", methods=["POST"])
 def api_heartbeat():
-    """Lightweight heartbeat — keeps employee status fresh without a full event."""
+    """Lightweight heartbeat â€” keeps employee status fresh without a full event."""
     try:
         data = request.get_json(force=True)
         if not data or not data.get("username"):
@@ -375,7 +375,7 @@ def api_heartbeat():
         return jsonify({"status": "error", "msg": str(e)}), 500
 
 
-# ── DASHBOARD DATA BUILDERS ────────────────────────────────────
+# â”€â”€ DASHBOARD DATA BUILDERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def get_all_employees_today():
     today = now_ist().strftime("%Y-%m-%d")
     this_month = now_ist().strftime("%Y-%m")
@@ -457,7 +457,7 @@ def get_all_employees_today():
                 city = r["city"] or "N/A"
                 reg  = r["region"] or ""
                 if city and city != "N/A":
-                    location = f"{city}, {reg}".strip(", ")
+                    location = city
                 ip = r["ip"] or "N/A"
                 if ip and "." in ip and ip != "N/A":
                     ip_addr = ip
@@ -467,7 +467,7 @@ def get_all_employees_today():
                 except Exception:
                     pass
 
-            # Status — walk events newest→oldest to find last meaningful state
+            # Status â€” walk events newestâ†’oldest to find last meaningful state
             status = "Offline"
             if last_event_dt:
                 mins_ago = (now_ist() - last_event_dt).total_seconds() / 60
@@ -533,7 +533,7 @@ def get_all_employees_today():
                     month_active_s += ar["duration_sec"] or 0
                     days_worked.add(ar["date"])
 
-            # Monthly session hours (login→logout pairs)
+            # Monthly session hours (loginâ†’logout pairs)
             month_sess_s = 0
             pending_dt = None
             for r in month_raw:
@@ -625,7 +625,7 @@ def get_employee_detail(username, computer):
         city = r["city"] or "N/A"
         reg  = r["region"] or ""
         if city != "N/A":
-            location = f"{city}, {reg}".strip(", ")
+            location = city
         ip = r["ip"] or "N/A"
         if ip and "." in ip and ip != "N/A":
             ip_addr = ip
@@ -746,7 +746,7 @@ def get_employee_detail(username, computer):
     }
 
 
-# ── HTML TEMPLATES ─────────────────────────────────────────────
+# â”€â”€ HTML TEMPLATES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 BASE_STYLE = """
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -865,7 +865,7 @@ BASE_STYLE = """
   ::-webkit-scrollbar-thumb { background: rgba(91,140,255,.25); border-radius: 10px; }
   ::-webkit-scrollbar-thumb:hover { background: rgba(91,140,255,.45); }
 
-  /* ── LIGHT THEME ─────────────────────────────────────────── */
+  /* â”€â”€ LIGHT THEME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   html[data-theme="light"] {
     --border: rgba(60,90,160,.16); --border-hi: rgba(60,90,160,.32);
     --text: #1a2030; --text-dim: #5b6a85;
@@ -982,7 +982,7 @@ INDEX_HTML = """<!DOCTYPE html>
 
   <div class="card-dark p-3">
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <span style="color:#7ab3e0;font-weight:600;"><i class="fa fa-table me-2"></i>All Employees — Today ({{ today }})</span>
+      <span style="color:#7ab3e0;font-weight:600;"><i class="fa fa-table me-2"></i>All Employees â€” Today ({{ today }})</span>
       <input type="text" id="srch" class="form-control form-control-sm w-auto"
              placeholder="Search..." onkeyup="filterTable()"
              style="background:#0d1e30;border-color:#1e3a5f;color:#e0e6ed;min-width:180px;">
@@ -1016,7 +1016,7 @@ INDEX_HTML = """<!DOCTYPE html>
           {% elif e.vpn_on %}
             <span style="color:#f97316;font-weight:600;">&#128274; VPN Active</span>
           {% else %}
-            <span style="color:#475569;font-size:.75rem;">—</span>
+            <span style="color:#475569;font-size:.75rem;">â€”</span>
           {% endif %}
         </td>
         <td>{{ e.first_login }}</td>
@@ -1160,7 +1160,7 @@ DETAIL_HTML = """<!DOCTYPE html>
   <div class="row g-3">
     <div class="col-lg-8">
       <div class="card-dark p-3 mb-3">
-        <div class="section-title mb-3"><i class="fa fa-calendar me-1"></i>This Month — Daily Active Hours</div>
+        <div class="section-title mb-3"><i class="fa fa-calendar me-1"></i>This Month â€” Daily Active Hours</div>
         <div>
         {% for d in e.cal %}
           <div class="cal-day {% if d.worked %}worked{% endif %}">
@@ -1169,7 +1169,7 @@ DETAIL_HTML = """<!DOCTYPE html>
               <div class="hrs">{{ d.dec }}</div>
               <div style="color:#4a9b6a;font-size:.68rem;">{{ d.active }}</div>
             {% else %}
-              <div style="color:#3a4a5a;font-size:.85rem;">—</div>
+              <div style="color:#3a4a5a;font-size:.85rem;">â€”</div>
             {% endif %}
           </div>
         {% endfor %}
@@ -1246,7 +1246,7 @@ DETAIL_HTML = """<!DOCTYPE html>
 </body></html>"""
 
 
-# ── ROUTES ─────────────────────────────────────────────────────
+# â”€â”€ ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.route("/")
 def index():
     try:
@@ -1302,7 +1302,7 @@ def clear_all():
     return jsonify({"status": "ok", "message": "All data cleared"})
 
 
-# ── KEYWORD MAPS ───────────────────────────────────────────────
+# â”€â”€ KEYWORD MAPS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 SOCIAL_MAP = {
     "youtube":"YouTube","instagram":"Instagram","facebook":"Facebook",
     "whatsapp":"WhatsApp","twitter":"Twitter/X","x.com":"Twitter/X",
@@ -1318,7 +1318,7 @@ FILE_SHARE_MAP = {
     "wetransfer":"WeTransfer","filezilla":"FileZilla","winscp":"WinSCP",
     "box.com":"Box","mega.nz":"Mega","anydesk":"AnyDesk","teamviewer":"TeamViewer",
 }
-# External / personal email providers — using these for company work is a data-leak risk
+# External / personal email providers â€” using these for company work is a data-leak risk
 EXTERNAL_EMAIL_MAP = {
     "mail.google.com":"Gmail", "gmail.com":"Gmail",
     "outlook.live.com":"Outlook.com (Personal)", "hotmail.com":"Hotmail",
@@ -1404,7 +1404,7 @@ def classify(app, title):
     return "work"
 
 
-# ── MONTHLY SUMMARY DATA BUILDER ───────────────────────────────
+# â”€â”€ MONTHLY SUMMARY DATA BUILDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def build_monthly_summary(month_str):
     """Build full monthly summary for all employees for a given month (YYYY-MM)."""
     with get_db() as conn:
@@ -1552,7 +1552,7 @@ def build_monthly_summary(month_str):
         if not disks:
             disks = [{"drive": "C:", "total_gb": 0, "used_gb": 0, "free_gb": 0, "pct_used": 0, "alert": "OK"}]
 
-        # Serial, location, IP — from most recent row
+        # Serial, location, IP â€” from most recent row
         serial = ip_addr = location = "N/A"
         for r in reversed(raw):
             if r["serial"] and r["serial"] not in ("N/A",""):
@@ -1560,7 +1560,7 @@ def build_monthly_summary(month_str):
             city = r["city"] or "N/A"
             reg  = r["region"] or ""
             if city and city != "N/A":
-                location = f"{city}, {reg}".strip(", ")
+                location = city
             ip = r["ip"] or "N/A"
             if ip and "." in ip and ip != "N/A":
                 ip_addr = ip
@@ -1590,7 +1590,7 @@ def build_monthly_summary(month_str):
         # Active / idle / app classification
         active_s = idle_s = work_s = comms_s = nonwork_s = 0
         app_ctr  = Counter()
-        social_monthly  = defaultdict(int)   # platform → secs
+        social_monthly  = defaultdict(int)   # platform â†’ secs
         fileshare_monthly = defaultdict(int)
 
         for ar in app_rows:
@@ -1709,7 +1709,7 @@ MONTHLY_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ company }} | Monthly Summary — {{ month_label }}</title>
+<title>{{ company }} | Monthly Summary â€” {{ month_label }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
@@ -1789,7 +1789,7 @@ MONTHLY_HTML = """<!DOCTYPE html>
   ::-webkit-scrollbar-thumb { background: rgba(91,140,255,.25); border-radius: 10px; }
   @media print { .month-nav,.export-btn,.topbar{display:none!important;} .emp-card{break-inside:avoid;} }
 
-  /* ── LIGHT THEME ─────────────────────────────────────────── */
+  /* â”€â”€ LIGHT THEME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   html[data-theme="light"] {
     --border: rgba(60,90,160,.16); --border-hi: rgba(60,90,160,.32);
     --text: #1a2030; --text-dim: #5b6a85;
@@ -1844,7 +1844,7 @@ MONTHLY_HTML = """<!DOCTYPE html>
 <div class="topbar">
   <div>
     <div class="logo"><i class="fa fa-shield-halved me-2" style="color:#3b82f6;"></i>{{ company }}</div>
-    <div class="sub">Monthly Summary Report — {{ month_label }}</div>
+    <div class="sub">Monthly Summary Report â€” {{ month_label }}</div>
   </div>
   <div class="d-flex gap-2 align-items-center">
     <a href="/" class="export-btn"><i class="fa fa-gauge me-1"></i>Live Dashboard</a>
@@ -1940,9 +1940,9 @@ MONTHLY_HTML = """<!DOCTYPE html>
           <div class="bar-nonwork"  style="width:{{ e.nonwork_pct }}%"></div>
         </div>
         <div class="bar-lbl">
-          <span style="color:#22c55e;">█ Work {{ e.work_pct }}%</span>&nbsp;&nbsp;
-          <span style="color:#60a5fa;">█ Comms {{ e.comms_pct }}%</span>&nbsp;&nbsp;
-          <span style="color:#ef4444;">█ Non-Work {{ e.nonwork_pct }}%</span>
+          <span style="color:#22c55e;">â–ˆ Work {{ e.work_pct }}%</span>&nbsp;&nbsp;
+          <span style="color:#60a5fa;">â–ˆ Comms {{ e.comms_pct }}%</span>&nbsp;&nbsp;
+          <span style="color:#ef4444;">â–ˆ Non-Work {{ e.nonwork_pct }}%</span>
         </div>
       </div>
 
@@ -2029,7 +2029,7 @@ MONTHLY_HTML = """<!DOCTYPE html>
         </div>
         {% endfor %}
         {% if not e.disks or e.disks[0].total_gb == 0 %}
-        <span class="no-alert" style="color:#475569;">No disk data yet — will appear after next heartbeat</span>
+        <span class="no-alert" style="color:#475569;">No disk data yet â€” will appear after next heartbeat</span>
         {% endif %}
       </div>
 
@@ -2102,7 +2102,7 @@ MONTHLY_HTML = """<!DOCTYPE html>
 {% endif %}
 
 <div style="text-align:center;color:#2a4a6a;font-size:.72rem;padding:20px;">
-  {{ company }} · Monthly Summary · {{ month_label }} · Generated {{ now }}
+  {{ company }} Â· Monthly Summary Â· {{ month_label }} Â· Generated {{ now }}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
@@ -2154,7 +2154,7 @@ def monthly_summary(month_str=None):
     )
 
 
-# ── MAIN ───────────────────────────────────────────────────────
+# â”€â”€ MAIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 init_db()   # must run at import time so gunicorn workers have tables ready
 
 if __name__ == "__main__":
@@ -2165,7 +2165,7 @@ if __name__ == "__main__":
 
     print()
     print("=" * 65)
-    print(f"  {COMPANY} — EmpMon V8 Central Server")
+    print(f"  {COMPANY} â€” EmpMon V8 Central Server")
     print("=" * 65)
     print(f"  Database : {DB_PATH}")
     print()
