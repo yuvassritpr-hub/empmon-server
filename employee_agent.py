@@ -58,7 +58,7 @@ except ImportError:
 
 # ══════════════════════════════════════════════════════════
 #  CHANGE THIS TO YOUR SERVER PC'S IP ADDRESS
-SERVER_URL = "http://127.0.0.1:5050"   # ← Edit this (Node.js real-time server)
+SERVER_URL = "https://empmon-server.onrender.com"   # ← Render.com cloud — works from any country
 # ══════════════════════════════════════════════════════════
 
 SCRIPTS_DIR      = r"C:\EmpMonitor"
@@ -302,47 +302,99 @@ def detect_usb_drives():
 
 
 def detect_vpn():
-    """Detect if employee is connected to VPN."""
-    vpn_info = {"connected": False, "software": [], "adapter": ""}
+    """Detect VPN and remote desktop apps running on employee PC."""
+    vpn_info = {"connected": False, "software": [], "adapter": "",
+                "remote_desktop": [], "remote_detected": False}
 
-    # 1. Check running VPN processes
+    # ── VPN processes ──────────────────────────────────────────
     VPN_PROCS = {
-        "vpnui.exe":        "Cisco AnyConnect",
-        "vpnclient.exe":    "Cisco VPN",
-        "forticlient.exe":  "FortiClient VPN",
-        "fortivpn.exe":     "FortiClient VPN",
-        "openvpn.exe":      "OpenVPN",
-        "openvpn-gui.exe":  "OpenVPN",
-        "nordvpn.exe":      "NordVPN",
-        "expressvpn.exe":   "ExpressVPN",
-        "surfshark.exe":    "Surfshark VPN",
-        "pvpn-cli.exe":     "ProtonVPN",
-        "protonvpn.exe":    "ProtonVPN",
-        "windscribe.exe":   "Windscribe VPN",
-        "pulsesecure.exe":  "Pulse Secure VPN",
-        "globalprotect.exe":"GlobalProtect VPN",
-        "zscaler.exe":      "Zscaler VPN",
-        "softether.exe":    "SoftEther VPN",
-        "mstsc.exe":        "Remote Desktop (RDP)",
-        "anydesk.exe":      "AnyDesk Remote",
-        "rustdesk.exe":     "RustDesk Remote",
-        "teamviewer.exe":   "TeamViewer Remote",
+        "vpnui.exe":          "Cisco AnyConnect",
+        "vpnclient.exe":      "Cisco VPN",
+        "forticlient.exe":    "FortiClient VPN",
+        "fortivpn.exe":       "FortiClient VPN",
+        "openvpn.exe":        "OpenVPN",
+        "openvpn-gui.exe":    "OpenVPN",
+        "nordvpn.exe":        "NordVPN",
+        "expressvpn.exe":     "ExpressVPN",
+        "surfshark.exe":      "Surfshark VPN",
+        "pvpn-cli.exe":       "ProtonVPN",
+        "protonvpn.exe":      "ProtonVPN",
+        "windscribe.exe":     "Windscribe VPN",
+        "pulsesecure.exe":    "Pulse Secure VPN",
+        "globalprotect.exe":  "GlobalProtect VPN",
+        "zscaler.exe":        "Zscaler VPN",
+        "softether.exe":      "SoftEther VPN",
+        "mullvad-vpn.exe":    "Mullvad VPN",
+        "pia-client.exe":     "PIA VPN",
+        "privatetunnel.exe":  "Private Tunnel VPN",
+        "vyprvpn.exe":        "VyprVPN",
+        "hideme.exe":         "Hide.me VPN",
+        "wireguard.exe":      "WireGuard VPN",
+        "tailscale.exe":      "Tailscale VPN",
+        "warp-taskbar.exe":   "Cloudflare WARP VPN",
+        "hotspotshield.exe":  "Hotspot Shield VPN",
+        "ivacy.exe":          "Ivacy VPN",
+        "cyberghost.exe":     "CyberGhost VPN",
+        "ipvanish.exe":       "IPVanish VPN",
     }
+
+    # ── Remote Desktop / Remote Access processes ───────────────
+    REMOTE_PROCS = {
+        "mstsc.exe":            "Windows RDP",
+        "msrdc.exe":            "Windows RDP (Modern)",
+        "anydesk.exe":          "AnyDesk",
+        "anydesk_desktop.exe":  "AnyDesk",
+        "rustdesk.exe":         "RustDesk",
+        "teamviewer.exe":       "TeamViewer",
+        "teamviewer_desktop.exe": "TeamViewer",
+        "tv_w32.exe":           "TeamViewer",
+        "tv_x64.exe":           "TeamViewer",
+        "logmein.exe":          "LogMeIn",
+        "logmein_client.exe":   "LogMeIn",
+        "ra_server.exe":        "Radmin",
+        "rfview.exe":           "Radmin Viewer",
+        "vncviewer.exe":        "VNC Viewer",
+        "tvnviewer.exe":        "TightVNC",
+        "winvnc4.exe":          "RealVNC Server",
+        "vncserver.exe":        "VNC Server",
+        "ultravnc.exe":         "UltraVNC",
+        "splashtop.exe":        "Splashtop",
+        "splashtopstreamer.exe":"Splashtop Streamer",
+        "screenconnect.client.exe": "ConnectWise Control",
+        "screenconnect.exe":    "ConnectWise Control",
+        "zohoassist.exe":       "Zoho Assist",
+        "remotedesktop.exe":    "Chrome Remote Desktop",
+        "parsec.exe":           "Parsec Remote",
+        "dwagent.exe":          "DWService Remote",
+        "supremo.exe":          "SupRemo Remote",
+        "gotomypc.exe":         "GoToMyPC",
+        "g2mstart.exe":         "GoToMeeting/Remote",
+        "bomgar-rd.exe":        "BeyondTrust Remote",
+        "beyondtrust.exe":      "BeyondTrust Remote",
+        "remotepc.exe":         "RemotePC",
+        "iperius.exe":          "Iperius Remote",
+        "netop.exe":            "NetOp Remote",
+    }
+
     try:
         if HAS_PSUTIL:
             for proc in psutil.process_iter(["name"]):
                 pname = (proc.info["name"] or "").lower()
                 for exe, label in VPN_PROCS.items():
-                    if exe.lower() == pname:
+                    if exe.lower() == pname and label not in vpn_info["software"]:
                         vpn_info["software"].append(label)
                         vpn_info["connected"] = True
+                for exe, label in REMOTE_PROCS.items():
+                    if exe.lower() == pname and label not in vpn_info["remote_desktop"]:
+                        vpn_info["remote_desktop"].append(label)
+                        vpn_info["remote_detected"] = True
     except Exception:
         pass
 
-    # 2. Check network adapters for VPN virtual adapters
+    # ── Network adapters for VPN detection ────────────────────
     VPN_ADAPTER_KEYS = ["vpn","tap","tun","virtual","nordlynx","wireguard",
                         "proton","forticlient","cisco","pulse","zscaler",
-                        "anyconnect","globalprotect"]
+                        "anyconnect","globalprotect","tailscale","warp","mullvad"]
     try:
         if HAS_PSUTIL:
             for iface, addrs in psutil.net_if_stats().items():
@@ -392,9 +444,10 @@ def send_heartbeat():
             "username": USER, "computer": PC,
             "serial":   SERIAL,
             "ip": ip, "city": city, "region": reg, "country": coun,
-            "disks":      get_disk_usage(),
-            "vpn":        vpn,
-            "usb_drives": detect_usb_drives(),
+            "disks":        get_disk_usage(),
+            "vpn":          vpn,
+            "remote_apps":  vpn.get("remote_desktop", []),
+            "usb_drives":   detect_usb_drives(),
         }, timeout=6)
     except Exception:
         pass

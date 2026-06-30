@@ -421,9 +421,21 @@ html[data-theme="dark"] .emp-card {
   padding: 3px 9px;
   border-radius: 20px;
   white-space: nowrap;
-  max-width: 130px;
+  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.remote-pill {
+  background: rgba(239,68,68,.12);
+  border: 1px solid rgba(239,68,68,.35);
+  color: #ef4444;
+  animation: blink-alert 1.5s infinite;
+}
+
+@keyframes blink-alert {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .55; }
 }
 
 /* Time Row */

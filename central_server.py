@@ -305,6 +305,18 @@ def api_heartbeat():
                     v.get("adapter",""),
                     now.strftime("%Y-%m-%d %H:%M:%S")
                 ))
+            # Store remote desktop alert if sent
+            if data.get("remote_apps"):
+                apps_str = "REMOTE:" + ", ".join(data["remote_apps"])
+                conn.execute("""
+                    INSERT INTO vpn_log (date,time,username,computer,vpn_on,software,adapter,received_at)
+                    VALUES (?,?,?,?,?,?,?,?)
+                """, (
+                    now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S"),
+                    data["username"], data.get("computer","N/A"),
+                    1, apps_str, "remote_desktop",
+                    now.strftime("%Y-%m-%d %H:%M:%S")
+                ))
             # Store USB devices if sent
             if data.get("usb_drives"):
                 for u in data["usb_drives"]:
@@ -960,7 +972,9 @@ INDEX_HTML = """<!DOCTYPE html>
           {% else %}<span class="dot-offline"></span><span class="badge-offline">Offline</span>{% endif %}
         </td>
         <td>
-          {% if e.vpn_on and e.vpn_software %}
+          {% if e.vpn_on and e.vpn_software and e.vpn_software.startswith('REMOTE:') %}
+            <span style="color:#ef4444;font-weight:700;animation:blink 1s infinite;">&#128187; {{ e.vpn_software[7:] }}</span>
+          {% elif e.vpn_on and e.vpn_software %}
             <span style="color:#f97316;font-weight:600;">&#128274; {{ e.vpn_software }}</span>
           {% elif e.vpn_on %}
             <span style="color:#f97316;font-weight:600;">&#128274; VPN Active</span>

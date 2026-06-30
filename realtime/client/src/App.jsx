@@ -93,6 +93,7 @@ function EmployeeCard({ e }) {
         <div className="card-status">
           <StatusDot status={e.status} />
           {e.vpn && <div className="vpn-pill">🔒 {e.vpn}</div>}
+          {e.remoteApp && <div className="vpn-pill remote-pill">🖥️ {e.remoteApp}</div>}
         </div>
       </div>
 

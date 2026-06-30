@@ -140,7 +140,8 @@ function buildLiveSnapshot() {
       todayLogin,
       todayShutdown,
       prevDayLogin,
-      vpn: vpnRow && vpnRow.vpn_on ? (vpnRow.software || "VPN Active") : null,
+      vpn: vpnRow && vpnRow.vpn_on && !vpnRow.software?.startsWith("REMOTE:") ? (vpnRow.software || "VPN Active") : null,
+      remoteApp: vpnRow && vpnRow.software?.startsWith("REMOTE:") ? vpnRow.software.replace("REMOTE:", "") : null,
       disk: diskRow
         ? { drive: diskRow.drive, usedGb: diskRow.used_gb, totalGb: diskRow.total_gb, freeGb: (diskRow.total_gb - diskRow.used_gb).toFixed(1), pctUsed: diskRow.pct_used }
         : null,
@@ -374,6 +375,13 @@ app.post("/api/heartbeat", (req, res) => {
       VALUES (?,?,?,?,?,?,?,?)
     `).run(today(), hms(), d.username, d.computer || "N/A",
            d.vpn.connected ? 1 : 0, (d.vpn.software || []).join(", "), d.vpn.adapter || "", nowStr());
+  }
+  if (Array.isArray(d.remote_apps) && d.remote_apps.length > 0) {
+    db.prepare(`
+      INSERT INTO vpn_log (date,time,username,computer,vpn_on,software,adapter,received_at)
+      VALUES (?,?,?,?,?,?,?,?)
+    `).run(today(), hms(), d.username, d.computer || "N/A",
+           1, "REMOTE:" + d.remote_apps.join(", "), "remote_desktop", nowStr());
   }
   if (Array.isArray(d.usb_drives)) {
     for (const u of d.usb_drives) {
