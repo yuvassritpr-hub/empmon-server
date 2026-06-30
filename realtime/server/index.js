@@ -50,6 +50,11 @@ db.exec(`
     date TEXT, time TEXT, username TEXT, computer TEXT,
     drive TEXT, label TEXT, size_gb REAL, action TEXT DEFAULT 'connected', received_at TEXT
   );
+  CREATE TABLE IF NOT EXISTS browser_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT, time TEXT, username TEXT, computer TEXT,
+    domain TEXT, secs INTEGER DEFAULT 0, received_at TEXT
+  );
 `);
 
 const nowStr = () => new Date().toISOString().slice(0, 19).replace("T", " ");
@@ -129,6 +134,12 @@ function buildLiveSnapshot() {
     ).all(e.username, e.computer, yd);
     const prevDayLogin = prevRows.find((r) => isLogin(r.event))?.time || null;
 
+    // Today's top browser sites
+    const siteRows = db.prepare(
+      "SELECT domain, MAX(secs) as secs FROM browser_log WHERE username=? AND computer=? AND date=? GROUP BY domain ORDER BY secs DESC LIMIT 10"
+    ).all(e.username, e.computer, t);
+    const topSites = siteRows.map((r) => ({ domain: r.domain, secs: r.secs }));
+
     return {
       username: e.username,
       computer: e.computer,
@@ -150,6 +161,7 @@ function buildLiveSnapshot() {
       totalSecs,
       workApps: workAppList,
       commsApps: commsAppList,
+      topSites,
     };
   });
 }
@@ -382,6 +394,15 @@ app.post("/api/heartbeat", (req, res) => {
       VALUES (?,?,?,?,?,?,?,?)
     `).run(today(), hms(), d.username, d.computer || "N/A",
            1, "REMOTE:" + d.remote_apps.join(", "), "remote_desktop", nowStr());
+  }
+  if (Array.isArray(d.browser_sites)) {
+    for (const s of d.browser_sites) {
+      db.prepare(`
+        INSERT INTO browser_log (date,time,username,computer,domain,secs,received_at)
+        VALUES (?,?,?,?,?,?,?)
+      `).run(today(), hms(), d.username, d.computer || "N/A",
+             s.domain || "", s.secs || 0, nowStr());
+    }
   }
   if (Array.isArray(d.usb_drives)) {
     for (const u of d.usb_drives) {

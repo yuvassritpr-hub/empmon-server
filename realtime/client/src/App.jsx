@@ -152,12 +152,48 @@ function EmployeeCard({ e }) {
         <button className={`dtab ${tab === "top" ? "active top-active" : ""}`} onClick={() => setTab("top")}>
           📊 Top Apps
         </button>
+        <button className={`dtab ${tab === "browser" ? "active browser-active" : ""}`} onClick={() => setTab("browser")}>
+          🌐 Browser
+        </button>
         <button className={`dtab ${tab === "disk" ? "active disk-active" : ""}`} onClick={() => setTab("disk")}>
           💾 Storage
         </button>
       </div>
 
       <div className="detail-body">
+        {tab === "browser" && (
+          <div className="browser-sites">
+            {e.topSites && e.topSites.length > 0 ? (
+              <>
+                <div className="browser-header">Top websites visited today (Chrome / Edge)</div>
+                {e.topSites.map((s, i) => {
+                  const max = e.topSites[0]?.secs || 1;
+                  const pct = Math.round((s.secs / max) * 100);
+                  const isWork = /apollo|salesforce|hubspot|linkedin|zoho|pipedrive|notion|jira|confluence|github|gitlab|office|outlook|teams|docs\.google|sheets\.google|drive\.google|meet\.google|zoom|webex|monday|asana|trello|slack/.test(s.domain);
+                  const isSocial = /youtube|instagram|facebook|twitter|tiktok|snapchat|reddit|netflix|hotstar|spotify|discord|whatsapp|telegram/.test(s.domain);
+                  const barColor = isSocial ? "linear-gradient(90deg,#ef4444,#f87171)" : isWork ? "linear-gradient(90deg,#6c8cff,#818cf8)" : "linear-gradient(90deg,#f59e0b,#fbbf24)";
+                  return (
+                    <div key={i} className="aw-app-row">
+                      <div className="aw-app-header">
+                        <span className="aw-rank">{i + 1}</span>
+                        <span className="aw-name" style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <img src={`https://www.google.com/s2/favicons?domain=${s.domain}&sz=16`} width={16} height={16} style={{ borderRadius:3 }} onError={(ev)=>ev.target.style.display="none"} />
+                          {s.domain}
+                          {isSocial && <span style={{ fontSize:"0.65rem", background:"rgba(239,68,68,.15)", color:"#ef4444", borderRadius:4, padding:"1px 5px" }}>⚠ Non-work</span>}
+                          {isWork && <span style={{ fontSize:"0.65rem", background:"rgba(108,140,255,.15)", color:"#6c8cff", borderRadius:4, padding:"1px 5px" }}>✓ Work</span>}
+                        </span>
+                        <span className="aw-time">{fmtSecs(s.secs)}</span>
+                      </div>
+                      <div className="aw-bar-track">
+                        <div className="aw-bar-fill" style={{ width: `${pct}%`, background: barColor }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            ) : <div className="no-data">No browser data yet — will appear on next heartbeat (every 5 min)</div>}
+          </div>
+        )}
         {tab === "work" && (
           <>
             <div className="detail-pct-row">

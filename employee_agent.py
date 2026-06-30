@@ -20,9 +20,10 @@ WHAT IT DOES:
   - Runs silently in the background — no window shown.
 """
 
-import os, csv, socket, getpass, subprocess, sys, time, ctypes, json, threading
+import os, csv, socket, getpass, subprocess, sys, time, ctypes, json, threading, shutil, sqlite3, re
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 try:
     import requests
@@ -433,6 +434,123 @@ def get_disk_usage():
     return disks
 
 
+def get_chrome_top_sites(limit=10):
+    """Read today's top visited domains from Chrome History SQLite DB."""
+    try:
+        profiles = ["Default", "Profile 1", "Profile 2", "Profile 3"]
+        base = Path(os.environ.get("LOCALAPPDATA", "")) / "Google" / "Chrome" / "User Data"
+        if not base.exists():
+            return []
+        today = datetime.now().strftime("%Y-%m-%d")
+        # Chrome stores time as microseconds since 1601-01-01
+        import calendar
+        epoch_diff = 11644473600  # seconds between 1601 and 1970
+        today_start_us = (calendar.timegm(datetime.strptime(today, "%Y-%m-%d").timetuple()) + epoch_diff) * 1000000
+        today_end_us   = today_start_us + 86400 * 1000000
+
+        domain_secs = {}
+        for profile in profiles:
+            hist_path = base / profile / "History"
+            if not hist_path.exists():
+                continue
+            tmp = Path(os.environ.get("TEMP", "C:\\Temp")) / f"emp_chrome_hist_{profile}.db"
+            try:
+                shutil.copy2(str(hist_path), str(tmp))
+            except Exception:
+                continue
+            try:
+                conn = sqlite3.connect(str(tmp))
+                rows = conn.execute("""
+                    SELECT u.url, COUNT(*) as visits,
+                           SUM(v.visit_duration) as total_dur
+                    FROM visits v
+                    JOIN urls u ON v.url = u.id
+                    WHERE v.visit_time >= ? AND v.visit_time < ?
+                    GROUP BY u.url
+                    ORDER BY total_dur DESC
+                """, (today_start_us, today_end_us)).fetchall()
+                conn.close()
+                for url, visits, dur_us in rows:
+                    try:
+                        domain = urlparse(url).netloc.lower()
+                        domain = re.sub(r"^www\.", "", domain)
+                        if not domain or domain.startswith("chrome"):
+                            continue
+                        secs = int((dur_us or 0) / 1000000)
+                        domain_secs[domain] = domain_secs.get(domain, 0) + secs
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            finally:
+                try:
+                    tmp.unlink()
+                except Exception:
+                    pass
+
+        top = sorted(domain_secs.items(), key=lambda x: -x[1])[:limit]
+        return [{"domain": d, "secs": s} for d, s in top if s > 0]
+    except Exception:
+        return []
+
+
+def get_browser_top_sites(limit=10):
+    """Combine Chrome + Edge top sites for today."""
+    try:
+        profiles = ["Default", "Profile 1", "Profile 2"]
+        browsers = {
+            "Chrome": Path(os.environ.get("LOCALAPPDATA", "")) / "Google" / "Chrome" / "User Data",
+            "Edge":   Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "Edge" / "User Data",
+        }
+        import calendar
+        today = datetime.now().strftime("%Y-%m-%d")
+        epoch_diff = 11644473600
+        today_start_us = (calendar.timegm(datetime.strptime(today, "%Y-%m-%d").timetuple()) + epoch_diff) * 1000000
+        today_end_us   = today_start_us + 86400 * 1000000
+
+        domain_secs = {}
+        for browser_name, base in browsers.items():
+            if not base.exists():
+                continue
+            for profile in profiles:
+                hist_path = base / profile / "History"
+                if not hist_path.exists():
+                    continue
+                tmp = Path(os.environ.get("TEMP", "C:\\Temp")) / f"emp_{browser_name}_{profile}_hist.db"
+                try:
+                    shutil.copy2(str(hist_path), str(tmp))
+                    conn = sqlite3.connect(str(tmp))
+                    rows = conn.execute("""
+                        SELECT u.url, SUM(v.visit_duration) as total_dur
+                        FROM visits v JOIN urls u ON v.url = u.id
+                        WHERE v.visit_time >= ? AND v.visit_time < ?
+                        GROUP BY u.url ORDER BY total_dur DESC
+                    """, (today_start_us, today_end_us)).fetchall()
+                    conn.close()
+                    for url, dur_us in rows:
+                        try:
+                            domain = urlparse(url).netloc.lower()
+                            domain = re.sub(r"^www\.", "", domain)
+                            if not domain or domain.startswith("chrome") or domain.startswith("edge"):
+                                continue
+                            secs = int((dur_us or 0) / 1000000)
+                            domain_secs[domain] = domain_secs.get(domain, 0) + secs
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                finally:
+                    try:
+                        tmp.unlink()
+                    except Exception:
+                        pass
+
+        top = sorted(domain_secs.items(), key=lambda x: -x[1])[:limit]
+        return [{"domain": d, "secs": s} for d, s in top if s > 0]
+    except Exception:
+        return []
+
+
 def send_heartbeat():
     """Lightweight keep-alive so dashboard shows accurate online status."""
     if not HAS_REQUESTS:
@@ -448,7 +566,8 @@ def send_heartbeat():
             "vpn":          vpn,
             "remote_apps":  vpn.get("remote_desktop", []),
             "usb_drives":   detect_usb_drives(),
-        }, timeout=6)
+            "browser_sites": get_browser_top_sites(10),
+        }, timeout=10)
     except Exception:
         pass
 

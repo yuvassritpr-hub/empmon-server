@@ -116,6 +116,17 @@ def init_db():
                 pct_used     REAL DEFAULT 0,
                 received_at  TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS browser_log (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                date        TEXT NOT NULL,
+                time        TEXT NOT NULL,
+                username    TEXT NOT NULL,
+                computer    TEXT NOT NULL,
+                domain      TEXT NOT NULL,
+                secs        INTEGER DEFAULT 0,
+                received_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_browser_user ON browser_log(username, computer, date);
             CREATE INDEX IF NOT EXISTS idx_raw_date     ON raw_log(date, username);
             CREATE INDEX IF NOT EXISTS idx_raw_user     ON raw_log(username, computer);
             CREATE INDEX IF NOT EXISTS idx_app_date     ON app_log(date, username);
@@ -310,6 +321,18 @@ def api_heartbeat():
                     v.get("adapter",""),
                     now.strftime("%Y-%m-%d %H:%M:%S")
                 ))
+            # Store browser top sites if sent
+            if data.get("browser_sites"):
+                for site in data["browser_sites"]:
+                    conn.execute("""
+                        INSERT INTO browser_log (date,time,username,computer,domain,secs,received_at)
+                        VALUES (?,?,?,?,?,?,?)
+                    """, (
+                        now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S"),
+                        data["username"], data.get("computer","N/A"),
+                        site.get("domain",""), site.get("secs", 0),
+                        now.strftime("%Y-%m-%d %H:%M:%S")
+                    ))
             # Store remote desktop alert if sent
             if data.get("remote_apps"):
                 apps_str = "REMOTE:" + ", ".join(data["remote_apps"])
@@ -396,6 +419,14 @@ def get_all_employees_today():
                 WHERE username=? AND computer=? AND date LIKE ?
                 ORDER BY date, time
             """, (username, computer, f"{this_month}%")).fetchall()
+
+            # Today's top browser sites (aggregate by domain)
+            browser_rows = conn.execute("""
+                SELECT domain, MAX(secs) as secs FROM browser_log
+                WHERE username=? AND computer=? AND date=?
+                GROUP BY domain ORDER BY secs DESC LIMIT 10
+            """, (username, computer, today)).fetchall()
+            top_sites = [{"domain": r["domain"], "secs": r["secs"]} for r in browser_rows]
 
             # Latest VPN status
             vpn_row = conn.execute("""
@@ -534,6 +565,7 @@ def get_all_employees_today():
                 "idle_today":      fmt_secs(idle_today_s),
                 "top_app":         top_app,
                 "top5_today":      top5_today,
+                "top_sites":       top_sites,
                 "vpn_on":          vpn_on,
                 "vpn_software":    vpn_software,
                 "days_worked":     len(days_worked),
