@@ -558,7 +558,7 @@ def send_heartbeat():
     ip, city, reg, coun, lat, lon = _loc_cache
     try:
         vpn = detect_vpn()
-        requests.post(f"{SERVER_URL}/api/heartbeat", json={
+        r = requests.post(f"{SERVER_URL}/api/heartbeat", json={
             "username": USER, "computer": PC,
             "serial":   SERIAL,
             "ip": ip, "city": city, "region": reg, "country": coun,
@@ -568,6 +568,12 @@ def send_heartbeat():
             "usb_drives":   detect_usb_drives(),
             "browser_sites": get_browser_top_sites(10),
         }, timeout=10)
+        # If server was restarted (fresh DB), re-send today's LOGIN event
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("known") is False:
+                log("Server has no record of us — re-sending LOGIN")
+                record_event("LOGIN(reconnect)")
     except Exception:
         pass
 

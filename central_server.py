@@ -370,7 +370,9 @@ def api_heartbeat():
                         d.get("free_gb",0), d.get("pct_used",0),
                         now.strftime("%Y-%m-%d %H:%M:%S")
                     ))
-        return jsonify({"status": "ok"})
+        today_str = now.strftime("%Y-%m-%d")
+        known = conn.execute("SELECT 1 FROM raw_log WHERE username=? AND computer=? AND date=? LIMIT 1",(data["username"],data.get("computer","N/A"),today_str)).fetchone() is not None
+        return jsonify({"status": "ok", "known": known})
     except Exception as e:
         return jsonify({"status": "error", "msg": str(e)}), 500
 
