@@ -187,27 +187,6 @@ def get_gps_area():
     return None
 
 
-def reverse_geocode_area(lat, lon):
-    """Get suburb/area name from lat/lon using OpenStreetMap Nominatim."""
-    try:
-        r = requests.get(
-            "https://nominatim.openstreetmap.org/reverse",
-            params={"lat": lat, "lon": lon, "format": "json", "zoom": 14},
-            headers={"User-Agent": "EmpMonV8-WSafe/1.0"},
-            timeout=6
-        ).json()
-        addr = r.get("address", {})
-        city  = addr.get("city") or addr.get("town") or addr.get("county") or ""
-        state = addr.get("state") or ""
-        if city and state:
-            return f"{city}, {state}"
-        elif city:
-            return city
-    except Exception:
-        pass
-    return None
-
-
 def get_location():
     global _loc_cache
     ip = "N/A"
@@ -219,16 +198,11 @@ def get_location():
     try:
         d = requests.get("http://ip-api.com/json", timeout=6).json()
         if d.get("status") == "success" and d.get("city", "") not in ("", "N/A"):
-            lat = str(d.get("lat", "N/A"))
-            lon = str(d.get("lon", "N/A"))
-            # Try to get suburb/area level from lat/lon
-            area_city = None
-            if lat != "N/A" and lon != "N/A":
-                area_city = reverse_geocode_area(lat, lon)
-            city = area_city or d["city"]
-            result = (d.get("query", ip), city,
-                      d.get("city", "N/A"), d.get("countryCode", "IN"),
-                      lat, lon)
+            result = (d.get("query", ip),
+                      d.get("city", "N/A"),
+                      d.get("regionName", "N/A"),
+                      d.get("countryCode", "IN"),
+                      str(d.get("lat", "N/A")), str(d.get("lon", "N/A")))
             _loc_cache = result
             save_loc_cache(result)
             return result
@@ -238,15 +212,12 @@ def get_location():
     try:
         d = requests.get("https://ipinfo.io/json", timeout=6).json()
         loc = d.get("loc", "0,0").split(",")
-        lat = loc[0] if len(loc) > 1 else "N/A"
-        lon = loc[1] if len(loc) > 1 else "N/A"
-        area_city = None
-        if lat != "N/A" and lon != "N/A":
-            area_city = reverse_geocode_area(lat, lon)
-        city = area_city or d.get("city", "N/A")
-        result = (d.get("ip", ip), city,
-                  d.get("city", "N/A"), d.get("country", "IN"),
-                  lat, lon)
+        result = (d.get("ip", ip),
+                  d.get("city", "N/A"),
+                  d.get("region", "N/A"),
+                  d.get("country", "IN"),
+                  loc[0] if len(loc) > 1 else "N/A",
+                  loc[1] if len(loc) > 1 else "N/A")
         if result[1] not in ("N/A", ""):
             _loc_cache = result
             save_loc_cache(result)
