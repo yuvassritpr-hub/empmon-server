@@ -562,6 +562,15 @@ def get_all_employees_today():
                 "linkedin.com","pinterest.com","tumblr.com",
             }
             social_sites = [s for s in top_sites if any(sd in s["domain"] for sd in SOCIAL_DOMAINS)]
+            # Also detect from window titles in app_log
+            if not social_sites:
+                _SKW = ["instagram","facebook","whatsapp","youtube","tiktok","snapchat",
+                        "twitter","reddit","netflix","spotify","discord","telegram"]
+                for ar in app_rows:
+                    tl = (ar.get("window_title") or "").lower()
+                    if any(k in tl for k in _SKW):
+                        social_sites = [{"domain": "detected-via-title"}]
+                        break
 
             rows.append({
                 "username":        username,
@@ -1844,15 +1853,35 @@ def alerts_view():
         clean_employees = []
         for emp in emps:
             un, pc = emp["username"], emp["computer"]
+            # Source 1: browser_log (Chrome/Edge history via heartbeat)
             site_rows = conn.execute("""
                 SELECT domain, MAX(secs) as secs FROM browser_log
                 WHERE username=? AND computer=? AND date=?
                 GROUP BY domain ORDER BY secs DESC
             """, (un, pc, today)).fetchall()
-            social = [{"domain": r["domain"], "dur": fmt_secs(r["secs"]), "secs": r["secs"]}
-                      for r in site_rows if any(sd in r["domain"] for sd in SOCIAL_DOMAINS)]
-            if social:
-                alerts.append({"username": un, "computer": pc, "sites": social})
+            social = {r["domain"]: r["secs"] for r in site_rows
+                      if any(sd in r["domain"] for sd in SOCIAL_DOMAINS)}
+            # Source 2: app_log window titles (catches Firefox + currently-open tabs)
+            title_rows = conn.execute("""
+                SELECT window_title, SUM(duration_sec) as secs FROM app_log
+                WHERE username=? AND computer=? AND date=?
+                GROUP BY window_title
+            """, (un, pc, today)).fetchall()
+            SOCIAL_KW = ["instagram","facebook","whatsapp","youtube","tiktok",
+                         "snapchat","twitter","reddit","netflix","spotify",
+                         "discord","telegram","hotstar","threads"]
+            for tr in title_rows:
+                title = (tr["window_title"] or "").lower()
+                for kw in SOCIAL_KW:
+                    if kw in title:
+                        domain = kw + ".com"
+                        if domain not in social:
+                            social[domain] = tr["secs"] or 1
+                        break
+            social_list = [{"domain": d, "dur": fmt_secs(s), "secs": s}
+                           for d, s in sorted(social.items(), key=lambda x: -x[1])]
+            if social_list:
+                alerts.append({"username": un, "computer": pc, "sites": social_list})
             else:
                 clean_employees.append(un)
     alerts.sort(key=lambda a: sum(s["secs"] for s in a["sites"]), reverse=True)

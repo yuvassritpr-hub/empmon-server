@@ -546,7 +546,8 @@ def get_browser_top_sites(limit=10):
                         pass
 
         top = sorted(domain_secs.items(), key=lambda x: -x[1])[:limit]
-        return [{"domain": d, "secs": s} for d, s in top if s > 0]
+        # Include domains visited today even if duration not yet written (tab still open)
+        return [{"domain": d, "secs": max(s, 1)} for d, s in top]
     except Exception:
         return []
 
