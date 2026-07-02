@@ -1,4 +1,4 @@
-﻿"""
+"""
 EmpMon V8 - CENTRAL SERVER
 ===========================
 Receives data from ALL employee PCs via HTTP API.
@@ -7,7 +7,7 @@ Serves a live web dashboard showing all employees.
 
 HOW IT WORKS:
   1. Run this on the IT/HR admin PC (or any always-on machine).
-  2. Deploy employee_agent.py on each employee PC â€” it POSTs data here.
+  2. Deploy employee_agent.py on each employee PC -" it POSTs data here.
   3. Open http://THIS-PC-IP:5000 in any browser to see the dashboard.
 
 INSTALL:
@@ -27,19 +27,19 @@ def now_ist():
 from collections import defaultdict, Counter
 from flask import Flask, request, jsonify, render_template_string
 
-# â”€â”€ CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- CONFIG -----------------------------------------------------
 COMPANY      = "W-SAFE REINSURANCE"
 PORT         = 5000
 DB_PATH      = os.path.join(os.path.dirname(__file__), "empmon.db")
 IDLE_MIN     = 10
 OFFLINE_MIN  = 30
 REFRESH_S    = 60
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ---------------------------------------------------------------
 
 app = Flask(__name__)
 
 
-# â”€â”€ DATABASE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- DATABASE ---------------------------------------------------
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -136,7 +136,7 @@ def init_db():
     print(f"[DB] Database ready: {DB_PATH}")
 
 
-# â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- HELPERS ----------------------------------------------------
 def fmt_secs(s):
     if not s or s <= 0:
         return "0h 00m 00s"
@@ -162,7 +162,7 @@ def parse_duration(val):
         return 0
 
 
-# â”€â”€ API ENDPOINTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- API ENDPOINTS ----------------------------------------------
 @app.route("/api/event", methods=["POST"])
 def api_event():
     """Employee PC posts a login/logout event here."""
@@ -287,7 +287,7 @@ def api_batch():
 
 @app.route("/api/heartbeat", methods=["POST"])
 def api_heartbeat():
-    """Lightweight heartbeat â€” keeps employee status fresh without a full event."""
+    """Lightweight heartbeat -" keeps employee status fresh without a full event."""
     try:
         data = request.get_json(force=True)
         if not data or not data.get("username"):
@@ -377,7 +377,7 @@ def api_heartbeat():
         return jsonify({"status": "error", "msg": str(e)}), 500
 
 
-# â”€â”€ DASHBOARD DATA BUILDERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- DASHBOARD DATA BUILDERS ------------------------------------
 def get_all_employees_today():
     today = now_ist().strftime("%Y-%m-%d")
     this_month = now_ist().strftime("%Y-%m")
@@ -469,7 +469,7 @@ def get_all_employees_today():
                 except Exception:
                     pass
 
-            # Status â€” walk events newestâ†’oldest to find last meaningful state
+            # Status -" walk events newestâ†’oldest to find last meaningful state
             status = "Offline"
             if last_event_dt:
                 mins_ago = (now_ist() - last_event_dt).total_seconds() / 60
@@ -833,7 +833,7 @@ def get_employee_detail(username, computer):
     }
 
 
-# â”€â”€ HTML TEMPLATES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- HTML TEMPLATES ---------------------------------------------
 BASE_STYLE = """
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -952,7 +952,7 @@ BASE_STYLE = """
   ::-webkit-scrollbar-thumb { background: rgba(91,140,255,.25); border-radius: 10px; }
   ::-webkit-scrollbar-thumb:hover { background: rgba(91,140,255,.45); }
 
-  /* â”€â”€ LIGHT THEME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  /* -- LIGHT THEME ------------------------------------------- */
   html[data-theme="light"] {
     --border: rgba(60,90,160,.16); --border-hi: rgba(60,90,160,.32);
     --text: #1a2030; --text-dim: #5b6a85;
@@ -1069,7 +1069,7 @@ INDEX_HTML = """<!DOCTYPE html>
 
   <div class="card-dark p-3">
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <span style="color:#7ab3e0;font-weight:600;"><i class="fa fa-table me-2"></i>All Employees â€” Today ({{ today }})</span>
+      <span style="color:#7ab3e0;font-weight:600;"><i class="fa fa-table me-2"></i>All Employees -" Today ({{ today }})</span>
       <input type="text" id="srch" class="form-control form-control-sm w-auto"
              placeholder="Search..." onkeyup="filterTable()"
              style="background:#0d1e30;border-color:#1e3a5f;color:#e0e6ed;min-width:180px;">
@@ -1103,7 +1103,7 @@ INDEX_HTML = """<!DOCTYPE html>
           {% elif e.vpn_on %}
             <span style="color:#f97316;font-weight:600;">&#128274; VPN Active</span>
           {% else %}
-            <span style="color:#475569;font-size:.75rem;">â€”</span>
+            <span style="color:#475569;font-size:.75rem;">-"</span>
           {% endif %}
         </td>
         <td>{{ e.first_login }}</td>
@@ -1245,120 +1245,120 @@ DETAIL_HTML = """<!DOCTYPE html>
   </div>
 
   <!-- Activity Bar -->
-  <div class=”card-dark p-3 mb-3”>
-    <div class=”section-title mb-2”>&#9201; Today's Activity Breakdown</div>
-    <div style=”display:flex;height:18px;border-radius:8px;overflow:hidden;gap:2px;”>
-      {% if e.work_s > 0 %}<div style=”width:{{ e.work_pct }}%;background:linear-gradient(90deg,#6c8cff,#818cf8);” title=”Work {{ e.work_pct }}%”></div>{% endif %}
-      {% if e.comms_s > 0 %}<div style=”width:{{ e.comms_pct }}%;background:linear-gradient(90deg,#10b981,#34d399);” title=”Comms {{ e.comms_pct }}%”></div>{% endif %}
-      {% if e.nonwork_s > 0 %}<div style=”width:{{ e.nonwork_pct }}%;background:linear-gradient(90deg,#f59e0b,#fbbf24);” title=”Other {{ e.nonwork_pct }}%”></div>{% endif %}
+  <div class="card-dark p-3 mb-3">
+    <div class="section-title mb-2">&#9201; Today's Activity Breakdown</div>
+    <div style="display:flex;height:18px;border-radius:8px;overflow:hidden;gap:2px;">
+      {% if e.work_s > 0 %}<div style="width:{{ e.work_pct }}%;background:linear-gradient(90deg,#6c8cff,#818cf8);" title="Work {{ e.work_pct }}%"></div>{% endif %}
+      {% if e.comms_s > 0 %}<div style="width:{{ e.comms_pct }}%;background:linear-gradient(90deg,#10b981,#34d399);" title="Comms {{ e.comms_pct }}%"></div>{% endif %}
+      {% if e.nonwork_s > 0 %}<div style="width:{{ e.nonwork_pct }}%;background:linear-gradient(90deg,#f59e0b,#fbbf24);" title="Other {{ e.nonwork_pct }}%"></div>{% endif %}
     </div>
-    <div style=”display:flex;gap:20px;margin-top:8px;font-size:.78rem;color:var(--text-dim);”>
-      <span><span style=”display:inline-block;width:8px;height:8px;border-radius:50%;background:#6c8cff;margin-right:4px;”></span>Work <strong style=”color:#6c8cff;”>{{ e.work_pct }}%</strong></span>
-      <span><span style=”display:inline-block;width:8px;height:8px;border-radius:50%;background:#10b981;margin-right:4px;”></span>Comms <strong style=”color:#10b981;”>{{ e.comms_pct }}%</strong></span>
-      <span><span style=”display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:4px;”></span>Other <strong style=”color:#f59e0b;”>{{ e.nonwork_pct }}%</strong></span>
+    <div style="display:flex;gap:20px;margin-top:8px;font-size:.78rem;color:var(--text-dim);">
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6c8cff;margin-right:4px;"></span>Work <strong style="color:#6c8cff;">{{ e.work_pct }}%</strong></span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#10b981;margin-right:4px;"></span>Comms <strong style="color:#10b981;">{{ e.comms_pct }}%</strong></span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:4px;"></span>Other <strong style="color:#f59e0b;">{{ e.nonwork_pct }}%</strong></span>
     </div>
   </div>
 
   <!-- 3-column: Work / Comms / Browser -->
-  <div class=”row g-3 mb-3”>
-    <div class=”col-md-4”>
-      <div class=”card-dark p-3 h-100”>
-        <div class=”section-title mb-2”>&#128188; Work Details</div>
+  <div class="row g-3 mb-3">
+    <div class="col-md-4">
+      <div class="card-dark p-3 h-100">
+        <div class="section-title mb-2">&#128188; Work Details</div>
         {% for a in e.today_work_apps %}
         {% set max_s = e.today_work_apps[0].dur %}
-        <div class=”mb-2”>
-          <div class=”d-flex justify-content-between” style=”font-size:.8rem;”>
-            <span style=”color:#c0cfe0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;”>{{ loop.index }}. {{ a.app }}</span>
-            <span style=”color:#6c8cff;font-weight:600;”>{{ a.dur }}</span>
+        <div class="mb-2">
+          <div class="d-flex justify-content-between" style="font-size:.8rem;">
+            <span style="color:#c0cfe0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;">{{ loop.index }}. {{ a.app }}</span>
+            <span style="color:#6c8cff;font-weight:600;">{{ a.dur }}</span>
           </div>
-          <div style=”height:4px;background:rgba(108,140,255,.15);border-radius:2px;margin-top:3px;”>
-            <div style=”height:100%;width:100%;background:linear-gradient(90deg,#6c8cff,#818cf8);border-radius:2px;”></div>
+          <div style="height:4px;background:rgba(108,140,255,.15);border-radius:2px;margin-top:3px;">
+            <div style="height:100%;width:100%;background:linear-gradient(90deg,#6c8cff,#818cf8);border-radius:2px;"></div>
           </div>
         </div>
         {% endfor %}
-        {% if not e.today_work_apps %}<div class=”text-muted” style=”font-size:.8rem;”>No work activity today</div>{% endif %}
+        {% if not e.today_work_apps %}<div class="text-muted" style="font-size:.8rem;">No work activity today</div>{% endif %}
       </div>
     </div>
-    <div class=”col-md-4”>
-      <div class=”card-dark p-3 h-100”>
-        <div class=”section-title mb-2”>&#128172; Comms Details</div>
+    <div class="col-md-4">
+      <div class="card-dark p-3 h-100">
+        <div class="section-title mb-2">&#128172; Comms Details</div>
         {% for a in e.today_comms_apps %}
-        <div class=”mb-2”>
-          <div class=”d-flex justify-content-between” style=”font-size:.8rem;”>
-            <span style=”color:#c0cfe0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;”>{{ loop.index }}. {{ a.app }}</span>
-            <span style=”color:#10b981;font-weight:600;”>{{ a.dur }}</span>
+        <div class="mb-2">
+          <div class="d-flex justify-content-between" style="font-size:.8rem;">
+            <span style="color:#c0cfe0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;">{{ loop.index }}. {{ a.app }}</span>
+            <span style="color:#10b981;font-weight:600;">{{ a.dur }}</span>
           </div>
-          <div style=”height:4px;background:rgba(16,185,129,.15);border-radius:2px;margin-top:3px;”>
-            <div style=”height:100%;width:100%;background:linear-gradient(90deg,#10b981,#34d399);border-radius:2px;”></div>
+          <div style="height:4px;background:rgba(16,185,129,.15);border-radius:2px;margin-top:3px;">
+            <div style="height:100%;width:100%;background:linear-gradient(90deg,#10b981,#34d399);border-radius:2px;"></div>
           </div>
         </div>
         {% endfor %}
-        {% if not e.today_comms_apps %}<div class=”text-muted” style=”font-size:.8rem;”>No comms activity today</div>{% endif %}
+        {% if not e.today_comms_apps %}<div class="text-muted" style="font-size:.8rem;">No comms activity today</div>{% endif %}
       </div>
     </div>
-    <div class=”col-md-4”>
-      <div class=”card-dark p-3 h-100”>
-        <div class=”section-title mb-2”>&#127381; Non-Work / Other</div>
+    <div class="col-md-4">
+      <div class="card-dark p-3 h-100">
+        <div class="section-title mb-2">&#127381; Non-Work / Other</div>
         {% for a in e.today_nonwork %}
-        <div class=”d-flex justify-content-between mb-1” style=”font-size:.8rem;”>
-          <span style=”color:#c0cfe0;”>{{ loop.index }}. {{ a.app }}</span>
-          <span style=”color:#f59e0b;font-weight:600;”>{{ a.dur }}</span>
+        <div class="d-flex justify-content-between mb-1" style="font-size:.8rem;">
+          <span style="color:#c0cfe0;">{{ loop.index }}. {{ a.app }}</span>
+          <span style="color:#f59e0b;font-weight:600;">{{ a.dur }}</span>
         </div>
         {% endfor %}
-        {% if not e.today_nonwork %}<div class=”text-muted” style=”font-size:.8rem;”>No non-work activity</div>{% endif %}
+        {% if not e.today_nonwork %}<div class="text-muted" style="font-size:.8rem;">No non-work activity</div>{% endif %}
       </div>
     </div>
   </div>
 
   <!-- Browser Tabs (ActivityWatch style) -->
-  <div class=”card-dark p-3 mb-3”>
-    <div class=”section-title mb-3”>&#127760; Browser Tab Activity — Active Time per Tab (Chrome / Edge)</div>
+  <div class="card-dark p-3 mb-3">
+    <div class="section-title mb-3">&#127760; Browser Tab Activity — Active Time per Tab (Chrome / Edge)</div>
     {% if e.browser_tabs %}
     {% set max_tab_s = e.browser_tabs[0].secs %}
     {% for t in e.browser_tabs %}
-    <div class=”mb-2”>
-      <div class=”d-flex justify-content-between align-items-center” style=”font-size:.82rem;gap:8px;”>
-        <span style=”color:#c0cfe0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;”>
-          <span style=”color:#4a7a9b;margin-right:6px;”>{{ loop.index }}</span>{{ t.title }}
+    <div class="mb-2">
+      <div class="d-flex justify-content-between align-items-center" style="font-size:.82rem;gap:8px;">
+        <span style="color:#c0cfe0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">
+          <span style="color:#4a7a9b;margin-right:6px;">{{ loop.index }}</span>{{ t.title }}
         </span>
         {% if t.tag %}
-        <span style=”flex-shrink:0;font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:10px;background:{{ t.tag_color }}22;color:{{ t.tag_color }};border:1px solid {{ t.tag_color }}55;”>{{ t.tag }}</span>
+        <span style="flex-shrink:0;font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:10px;background:{{ t.tag_color }}22;color:{{ t.tag_color }};border:1px solid {{ t.tag_color }}55;">{{ t.tag }}</span>
         {% endif %}
-        <span style=”flex-shrink:0;color:#60a5fa;font-weight:600;”>{{ t.dur }}</span>
+        <span style="flex-shrink:0;color:#60a5fa;font-weight:600;">{{ t.dur }}</span>
       </div>
-      <div style=”height:5px;background:rgba(255,255,255,.06);border-radius:3px;margin-top:4px;”>
+      <div style="height:5px;background:rgba(255,255,255,.06);border-radius:3px;margin-top:4px;">
         {% if t.tag == '🎮 GAME' %}
-        <div style=”height:100%;width:{{ (t.secs / max_tab_s * 100)|int }}%;background:linear-gradient(90deg,#dc2626,#f87171);border-radius:3px;”></div>
+        <div style="height:100%;width:{{ (t.secs / max_tab_s * 100)|int }}%;background:linear-gradient(90deg,#dc2626,#f87171);border-radius:3px;"></div>
         {% elif '⚠' in t.tag %}
-        <div style=”height:100%;width:{{ (t.secs / max_tab_s * 100)|int }}%;background:linear-gradient(90deg,#f97316,#fb923c);border-radius:3px;”></div>
+        <div style="height:100%;width:{{ (t.secs / max_tab_s * 100)|int }}%;background:linear-gradient(90deg,#f97316,#fb923c);border-radius:3px;"></div>
         {% elif '✓' in t.tag %}
-        <div style=”height:100%;width:{{ (t.secs / max_tab_s * 100)|int }}%;background:linear-gradient(90deg,#22c55e,#4ade80);border-radius:3px;”></div>
+        <div style="height:100%;width:{{ (t.secs / max_tab_s * 100)|int }}%;background:linear-gradient(90deg,#22c55e,#4ade80);border-radius:3px;"></div>
         {% else %}
-        <div style=”height:100%;width:{{ (t.secs / max_tab_s * 100)|int }}%;background:linear-gradient(90deg,#06b6d4,#22d3ee);border-radius:3px;”></div>
+        <div style="height:100%;width:{{ (t.secs / max_tab_s * 100)|int }}%;background:linear-gradient(90deg,#06b6d4,#22d3ee);border-radius:3px;"></div>
         {% endif %}
       </div>
     </div>
     {% endfor %}
     {% else %}
-    <div class=”text-muted” style=”font-size:.83rem;”>No browser tab data yet for today</div>
+    <div class="text-muted" style="font-size:.83rem;">No browser tab data yet for today</div>
     {% endif %}
   </div>
 
-  <div class=”row g-3”>
-    <div class=”col-lg-8”>
+  <div class="row g-3">
+    <div class="col-lg-8">
       <!-- Daily Login/Logout Table -->
-      <div class=”card-dark p-3 mb-3”>
-        <div class=”section-title mb-2”>&#128197; This Month — Daily Login &amp; Logout Times</div>
-        <div class=”table-responsive”>
-        <table class=”table table-dark-custom mb-0” style=”font-size:.82rem;”>
+      <div class="card-dark p-3 mb-3">
+        <div class="section-title mb-2">&#128197; This Month — Daily Login &amp; Logout Times</div>
+        <div class="table-responsive">
+        <table class="table table-dark-custom mb-0" style="font-size:.82rem;">
           <thead><tr><th>Day</th><th>Login</th><th>Shutdown / Logoff</th><th>Active Hrs</th></tr></thead>
           <tbody>
           {% for d in e.cal %}{% if d.worked %}
           <tr>
-            <td style=”color:#7ab3e0;font-weight:600;”>{{ d.day }}</td>
-            <td style=”color:#22c55e;”>{{ d.login if d.login != '--' else '—' }}</td>
-            <td style=”color:#ef4444;”>{{ d.logout if d.logout != '--' else '—' }}</td>
-            <td><span style=”background:rgba(108,140,255,.15);color:#6c8cff;padding:2px 8px;border-radius:6px;font-weight:600;”>{{ d.active }}</span></td>
+            <td style="color:#7ab3e0;font-weight:600;">{{ d.day }}</td>
+            <td style="color:#22c55e;">{{ d.login if d.login != '--' else '—' }}</td>
+            <td style="color:#ef4444;">{{ d.logout if d.logout != '--' else '—' }}</td>
+            <td><span style="background:rgba(108,140,255,.15);color:#6c8cff;padding:2px 8px;border-radius:6px;font-weight:600;">{{ d.active }}</span></td>
           </tr>
           {% endif %}{% endfor %}
           </tbody>
@@ -1366,26 +1366,26 @@ DETAIL_HTML = """<!DOCTYPE html>
         </div>
       </div>
       <!-- Recent Events -->
-      <div class=”card-dark p-3”>
-        <div class=”section-title mb-2”>&#9776; Recent Events (last 50)</div>
-        <div class=”table-responsive” style=”max-height:280px;overflow-y:auto;”>
-        <table class=”table table-dark-custom mb-0” style=”font-size:.78rem;”>
+      <div class="card-dark p-3">
+        <div class="section-title mb-2">&#9776; Recent Events (last 50)</div>
+        <div class="table-responsive" style="max-height:280px;overflow-y:auto;">
+        <table class="table table-dark-custom mb-0" style="font-size:.78rem;">
           <thead><tr><th>Date</th><th>Time</th><th>Event</th><th>IP</th><th>City</th></tr></thead>
           <tbody>
           {% for r in e.recent %}
           <tr>
             <td>{{ r.date }}</td><td>{{ r.time }}</td>
             <td>{% set ev = r.event | upper %}
-              {% if ev == 'LOGIN' %}<span style=”color:#22c55e;font-weight:600;”>&#9654; LOGIN</span>
-              {% elif 'LOGIN' in ev %}<span style=”color:#22c55e;”>&#9654; {{ r.event }}</span>
-              {% elif ev == 'LOGOUT(SHUTDOWN)' %}<span style=”color:#ef4444;font-weight:600;”>&#9209; SHUTDOWN</span>
-              {% elif ev == 'LOGOUT(LOGOFF)' %}<span style=”color:#ef4444;font-weight:600;”>&#128682; Log Off</span>
-              {% elif 'LOGOUT' in ev %}<span style=”color:#f97316;”>&#9209; {{ r.event }}</span>
-              {% elif ev == 'HEARTBEAT' %}<span style=”color:#475569;”>&#9679; Heartbeat</span>
-              {% else %}<span style=”color:#94a3b8;”>{{ r.event }}</span>{% endif %}
+              {% if ev == 'LOGIN' %}<span style="color:#22c55e;font-weight:600;">&#9654; LOGIN</span>
+              {% elif 'LOGIN' in ev %}<span style="color:#22c55e;">&#9654; {{ r.event }}</span>
+              {% elif ev == 'LOGOUT(SHUTDOWN)' %}<span style="color:#ef4444;font-weight:600;">&#9209; SHUTDOWN</span>
+              {% elif ev == 'LOGOUT(LOGOFF)' %}<span style="color:#ef4444;font-weight:600;">&#128682; Log Off</span>
+              {% elif 'LOGOUT' in ev %}<span style="color:#f97316;">&#9209; {{ r.event }}</span>
+              {% elif ev == 'HEARTBEAT' %}<span style="color:#475569;">&#9679; Heartbeat</span>
+              {% else %}<span style="color:#94a3b8;">{{ r.event }}</span>{% endif %}
             </td>
-            <td><small class=”text-muted”>{{ r.ip }}</small></td>
-            <td><small class=”text-muted”>{{ r.city }}</small></td>
+            <td><small class="text-muted">{{ r.ip }}</small></td>
+            <td><small class="text-muted">{{ r.city }}</small></td>
           </tr>
           {% endfor %}
           </tbody>
@@ -1393,31 +1393,31 @@ DETAIL_HTML = """<!DOCTYPE html>
         </div>
       </div>
     </div>
-    <div class=”col-lg-4”>
-      <div class=”card-dark p-3 mb-3”>
-        <div class=”section-title mb-3”>&#128202; Top 10 Apps This Month</div>
+    <div class="col-lg-4">
+      <div class="card-dark p-3 mb-3">
+        <div class="section-title mb-3">&#128202; Top 10 Apps This Month</div>
         {% for a in e.top10_apps %}
-        <div class=”d-flex justify-content-between align-items-center mb-2”>
-          <div style=”font-size:.82rem;color:#c0cfe0;max-width:68%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;”>
-            <span style=”color:#4a7a9b;margin-right:6px;”>{{ loop.index }}</span>{{ a.app }}
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div style="font-size:.82rem;color:#c0cfe0;max-width:68%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            <span style="color:#4a7a9b;margin-right:6px;">{{ loop.index }}</span>{{ a.app }}
           </div>
-          <div style=”font-size:.82rem;color:#60a5fa;font-weight:600;”>{{ a.dur }}</div>
+          <div style="font-size:.82rem;color:#60a5fa;font-weight:600;">{{ a.dur }}</div>
         </div>
         {% endfor %}
-        {% if not e.top10_apps %}<div class=”text-muted” style=”font-size:.83rem;”>No app data</div>{% endif %}
+        {% if not e.top10_apps %}<div class="text-muted" style="font-size:.83rem;">No app data</div>{% endif %}
       </div>
       <!-- Daily Hours Calendar -->
-      <div class=”card-dark p-3”>
-        <div class=”section-title mb-2”>&#9201; This Month — Daily Active Hours</div>
+      <div class="card-dark p-3">
+        <div class="section-title mb-2">&#9201; This Month — Daily Active Hours</div>
         <div>
         {% for d in e.cal %}
-          <div class=”cal-day {% if d.worked %}worked{% endif %}”>
-            <div style=”color:#4a7a9b;font-size:.7rem;”>{{ d.day }}</div>
+          <div class="cal-day {% if d.worked %}worked{% endif %}">
+            <div style="color:#4a7a9b;font-size:.7rem;">{{ d.day }}</div>
             {% if d.worked %}
-              <div class=”hrs”>{{ d.dec }}</div>
-              <div style=”color:#4a9b6a;font-size:.68rem;”>{{ d.active }}</div>
+              <div class="hrs">{{ d.dec }}</div>
+              <div style="color:#4a9b6a;font-size:.68rem;">{{ d.active }}</div>
             {% else %}
-              <div style=”color:#3a4a5a;font-size:.85rem;”>—</div>
+              <div style="color:#3a4a5a;font-size:.85rem;">—</div>
             {% endif %}
           </div>
         {% endfor %}
@@ -1426,11 +1426,11 @@ DETAIL_HTML = """<!DOCTYPE html>
     </div>
   </div>
 </div>
-<script src=”https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js”></script>
-</body></html>”””
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body></html>"""
 
 
-# â”€â”€ ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- ROUTES -----------------------------------------------------
 @app.route("/")
 def index():
     try:
@@ -1486,7 +1486,7 @@ def clear_all():
     return jsonify({"status": "ok", "message": "All data cleared"})
 
 
-# â”€â”€ KEYWORD MAPS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- KEYWORD MAPS -----------------------------------------------
 SOCIAL_MAP = {
     "youtube":"YouTube","instagram":"Instagram","facebook":"Facebook",
     "whatsapp":"WhatsApp","twitter":"Twitter/X","x.com":"Twitter/X",
@@ -1502,7 +1502,7 @@ FILE_SHARE_MAP = {
     "wetransfer":"WeTransfer","filezilla":"FileZilla","winscp":"WinSCP",
     "box.com":"Box","mega.nz":"Mega","anydesk":"AnyDesk","teamviewer":"TeamViewer",
 }
-# External / personal email providers â€” using these for company work is a data-leak risk
+# External / personal email providers -" using these for company work is a data-leak risk
 EXTERNAL_EMAIL_MAP = {
     "mail.google.com":"Gmail", "gmail.com":"Gmail",
     "outlook.live.com":"Outlook.com (Personal)", "hotmail.com":"Hotmail",
@@ -1588,7 +1588,7 @@ def classify(app, title):
     return "work"
 
 
-# â”€â”€ MONTHLY SUMMARY DATA BUILDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- MONTHLY SUMMARY DATA BUILDER -------------------------------
 def build_monthly_summary(month_str):
     """Build full monthly summary for all employees for a given month (YYYY-MM)."""
     with get_db() as conn:
@@ -1750,7 +1750,7 @@ def build_monthly_summary(month_str):
         if not disks:
             disks = [{"drive": "C:", "total_gb": 0, "used_gb": 0, "free_gb": 0, "pct_used": 0, "alert": "OK"}]
 
-        # Serial, location, IP â€” from most recent row
+        # Serial, location, IP -" from most recent row
         serial = ip_addr = location = "N/A"
         for r in reversed(raw):
             if r["serial"] and r["serial"] not in ("N/A",""):
@@ -1907,7 +1907,7 @@ MONTHLY_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ company }} | Monthly Summary â€” {{ month_label }}</title>
+<title>{{ company }} | Monthly Summary -" {{ month_label }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
@@ -1987,7 +1987,7 @@ MONTHLY_HTML = """<!DOCTYPE html>
   ::-webkit-scrollbar-thumb { background: rgba(91,140,255,.25); border-radius: 10px; }
   @media print { .month-nav,.export-btn,.topbar{display:none!important;} .emp-card{break-inside:avoid;} }
 
-  /* â”€â”€ LIGHT THEME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  /* -- LIGHT THEME ------------------------------------------- */
   html[data-theme="light"] {
     --border: rgba(60,90,160,.16); --border-hi: rgba(60,90,160,.32);
     --text: #1a2030; --text-dim: #5b6a85;
@@ -2042,7 +2042,7 @@ MONTHLY_HTML = """<!DOCTYPE html>
 <div class="topbar">
   <div>
     <div class="logo"><i class="fa fa-shield-halved me-2" style="color:#3b82f6;"></i>{{ company }}</div>
-    <div class="sub">Monthly Summary Report â€” {{ month_label }}</div>
+    <div class="sub">Monthly Summary Report -" {{ month_label }}</div>
   </div>
   <div class="d-flex gap-2 align-items-center">
     <a href="/" class="export-btn"><i class="fa fa-gauge me-1"></i>Live Dashboard</a>
@@ -2227,7 +2227,7 @@ MONTHLY_HTML = """<!DOCTYPE html>
         </div>
         {% endfor %}
         {% if not e.disks or e.disks[0].total_gb == 0 %}
-        <span class="no-alert" style="color:#475569;">No disk data yet â€” will appear after next heartbeat</span>
+        <span class="no-alert" style="color:#475569;">No disk data yet -" will appear after next heartbeat</span>
         {% endif %}
       </div>
 
@@ -2352,7 +2352,7 @@ def monthly_summary(month_str=None):
     )
 
 
-# â”€â”€ MAIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- MAIN -------------------------------------------------------
 init_db()   # must run at import time so gunicorn workers have tables ready
 
 if __name__ == "__main__":
@@ -2363,7 +2363,7 @@ if __name__ == "__main__":
 
     print()
     print("=" * 65)
-    print(f"  {COMPANY} â€” EmpMon V8 Central Server")
+    print(f"  {COMPANY} -- EmpMon V8 Central Server")
     print("=" * 65)
     print(f"  Database : {DB_PATH}")
     print()
