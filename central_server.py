@@ -17,7 +17,7 @@ RUN:
   python central_server.py
 """
 
-import os, json, sqlite3, socket
+import os, json, sqlite3, socket, re
 from datetime import datetime, timedelta, timezone
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -659,20 +659,93 @@ def get_employee_detail(username, computer):
             else:
                 status = "Online"
 
-    # Today app
-    act_s = idle_s = 0
+    # Today app — work/comms/nonwork + browser tabs
+    act_s = idle_s = work_s = comms_s = nonwork_s = 0
     app_ctr = Counter()
+    work_ctr = Counter()
+    comms_ctr = Counter()
+    nonwork_ctr = Counter()
+    tab_ctr = Counter()   # browser tab titles
+    BROWSER_RE = re.compile(r'chrome|msedge|firefox|brave|opera', re.I)
+    BROWSER_SUFFIX = re.compile(r'\s*[-–|]\s*(Google Chrome|Microsoft Edge|Mozilla Firefox|Brave|Opera|Chrome).*$', re.I)
+
     for ar in today_app:
         dur_s = ar["duration_sec"] or 0
         state = (ar["state"] or "active").lower()
         apn   = ar["app"] or ""
+        title = ar["window_title"] or ""
         if state == "active":
             act_s += dur_s
             if apn:
                 app_ctr[apn] += dur_s
+            cat = classify(apn, title)
+            if cat == "work":
+                work_s += dur_s
+                work_ctr[friendly_name(apn)] += dur_s
+            elif cat == "comms":
+                comms_s += dur_s
+                comms_ctr[friendly_name(apn)] += dur_s
+            else:
+                nonwork_s += dur_s
+                nonwork_ctr[friendly_name(apn)] += dur_s
+            # Browser tab tracking
+            if BROWSER_RE.search(apn):
+                clean = BROWSER_SUFFIX.sub("", title).strip()
+                if clean and len(clean) > 2 and not re.match(r'^(new tab|newtab)$', clean, re.I):
+                    tab_ctr[clean] += dur_s
         else:
             idle_s += dur_s
+
     top_app_today = app_ctr.most_common(1)[0][0] if app_ctr else "N/A"
+    total_s = work_s + comms_s + nonwork_s
+    work_pct    = round(work_s    / total_s * 100) if total_s else 0
+    comms_pct   = round(comms_s   / total_s * 100) if total_s else 0
+    nonwork_pct = round(nonwork_s / total_s * 100) if total_s else 0
+
+    today_work_apps  = [{"app": a, "dur": fmt_secs(s)} for a, s in work_ctr.most_common(8)]
+    today_comms_apps = [{"app": a, "dur": fmt_secs(s)} for a, s in comms_ctr.most_common(8)]
+    today_nonwork    = [{"app": a, "dur": fmt_secs(s)} for a, s in nonwork_ctr.most_common(5)]
+
+    # Browser tabs — classify as work/social/game
+    GAME_KW   = re.compile(r'game|gaming|steam|miniclip|poki|y8|friv|roblox|fortnite|minecraft|pubg|freefire|ludo|chess|candy|clash', re.I)
+    SOCIAL_KW = re.compile(r'youtube|instagram|facebook|twitter|tiktok|snapchat|reddit|netflix|hotstar|spotify|discord|whatsapp|telegram|reels|shorts', re.I)
+    WORK_KW   = re.compile(r'apollo|salesforce|hubspot|jira|github|gitlab|office|outlook|teams|meet|zoom|webex|monday|asana|trello|slack|sharepoint|notion|confluence|zoho|erp|crm|powerbi', re.I)
+    browser_tabs = []
+    for title, secs in tab_ctr.most_common(15):
+        tl = title.lower()
+        if GAME_KW.search(tl):
+            tag = "🎮 GAME"
+            tag_color = "#dc2626"
+        elif SOCIAL_KW.search(tl):
+            tag = "⚠ Non-Work"
+            tag_color = "#f97316"
+        elif WORK_KW.search(tl):
+            tag = "✓ Work"
+            tag_color = "#22c55e"
+        else:
+            tag = ""
+            tag_color = ""
+        browser_tabs.append({"title": title, "dur": fmt_secs(secs), "secs": secs, "tag": tag, "tag_color": tag_color})
+
+    # Today's browser history sites
+    with get_db() as conn:
+        site_rows = conn.execute("""
+            SELECT domain, MAX(secs) as secs FROM browser_log
+            WHERE username=? AND computer=? AND date=?
+            GROUP BY domain ORDER BY secs DESC LIMIT 10
+        """, (username, computer, today)).fetchall()
+    browser_sites = [{"domain": r["domain"], "dur": fmt_secs(r["secs"])} for r in site_rows]
+
+    # Daily breakdown for this month (login/logout per day)
+    daily_login  = {}
+    daily_logout = {}
+    for r in month_raw:
+        ev = r["event"].upper()
+        d  = r["date"]
+        if ev.startswith("LOGIN") and d not in daily_login:
+            daily_login[d] = r["time"]
+        if ev in ("LOGOUT(SHUTDOWN)", "LOGOUT(LOGOFF)"):
+            daily_logout[d] = r["time"]
 
     # Monthly calendar
     daily_act  = defaultdict(float)
@@ -730,6 +803,11 @@ def get_employee_detail(username, computer):
             "city": r["city"] or "N/A",
         })
 
+    # Enrich calendar with login/logout
+    for c in cal:
+        c["login"]   = daily_login.get(c["date"], "--")
+        c["logout"]  = daily_logout.get(c["date"], "--")
+
     return {
         "username": username, "computer": computer,
         "serial": serial, "status": status,
@@ -745,6 +823,13 @@ def get_employee_detail(username, computer):
         "cal":          cal,
         "top10_apps":   top10_apps,
         "recent":       recent,
+        "work_pct": work_pct, "comms_pct": comms_pct, "nonwork_pct": nonwork_pct,
+        "work_s": work_s, "comms_s": comms_s, "nonwork_s": nonwork_s,
+        "today_work_apps":  today_work_apps,
+        "today_comms_apps": today_comms_apps,
+        "today_nonwork":    today_nonwork,
+        "browser_tabs":     browser_tabs,
+        "browser_sites":    browser_sites,
     }
 
 
@@ -1159,66 +1244,148 @@ DETAIL_HTML = """<!DOCTYPE html>
     </div>
   </div>
 
-  <div class="row g-3">
-    <div class="col-lg-8">
-      <div class="card-dark p-3 mb-3">
-        <div class="section-title mb-3"><i class="fa fa-calendar me-1"></i>This Month â€” Daily Active Hours</div>
-        <div>
-        {% for d in e.cal %}
-          <div class="cal-day {% if d.worked %}worked{% endif %}">
-            <div style="color:#4a7a9b;font-size:.7rem;">{{ d.day }}</div>
-            {% if d.worked %}
-              <div class="hrs">{{ d.dec }}</div>
-              <div style="color:#4a9b6a;font-size:.68rem;">{{ d.active }}</div>
-            {% else %}
-              <div style="color:#3a4a5a;font-size:.85rem;">â€”</div>
-            {% endif %}
+  <!-- Activity Bar -->
+  <div class=”card-dark p-3 mb-3”>
+    <div class=”section-title mb-2”>&#9201; Today's Activity Breakdown</div>
+    <div style=”display:flex;height:18px;border-radius:8px;overflow:hidden;gap:2px;”>
+      {% if e.work_s > 0 %}<div style=”width:{{ e.work_pct }}%;background:linear-gradient(90deg,#6c8cff,#818cf8);” title=”Work {{ e.work_pct }}%”></div>{% endif %}
+      {% if e.comms_s > 0 %}<div style=”width:{{ e.comms_pct }}%;background:linear-gradient(90deg,#10b981,#34d399);” title=”Comms {{ e.comms_pct }}%”></div>{% endif %}
+      {% if e.nonwork_s > 0 %}<div style=”width:{{ e.nonwork_pct }}%;background:linear-gradient(90deg,#f59e0b,#fbbf24);” title=”Other {{ e.nonwork_pct }}%”></div>{% endif %}
+    </div>
+    <div style=”display:flex;gap:20px;margin-top:8px;font-size:.78rem;color:var(--text-dim);”>
+      <span><span style=”display:inline-block;width:8px;height:8px;border-radius:50%;background:#6c8cff;margin-right:4px;”></span>Work <strong style=”color:#6c8cff;”>{{ e.work_pct }}%</strong></span>
+      <span><span style=”display:inline-block;width:8px;height:8px;border-radius:50%;background:#10b981;margin-right:4px;”></span>Comms <strong style=”color:#10b981;”>{{ e.comms_pct }}%</strong></span>
+      <span><span style=”display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:4px;”></span>Other <strong style=”color:#f59e0b;”>{{ e.nonwork_pct }}%</strong></span>
+    </div>
+  </div>
+
+  <!-- 3-column: Work / Comms / Browser -->
+  <div class=”row g-3 mb-3”>
+    <div class=”col-md-4”>
+      <div class=”card-dark p-3 h-100”>
+        <div class=”section-title mb-2”>&#128188; Work Details</div>
+        {% for a in e.today_work_apps %}
+        {% set max_s = e.today_work_apps[0].dur %}
+        <div class=”mb-2”>
+          <div class=”d-flex justify-content-between” style=”font-size:.8rem;”>
+            <span style=”color:#c0cfe0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;”>{{ loop.index }}. {{ a.app }}</span>
+            <span style=”color:#6c8cff;font-weight:600;”>{{ a.dur }}</span>
           </div>
+          <div style=”height:4px;background:rgba(108,140,255,.15);border-radius:2px;margin-top:3px;”>
+            <div style=”height:100%;width:100%;background:linear-gradient(90deg,#6c8cff,#818cf8);border-radius:2px;”></div>
+          </div>
+        </div>
         {% endfor %}
+        {% if not e.today_work_apps %}<div class=”text-muted” style=”font-size:.8rem;”>No work activity today</div>{% endif %}
+      </div>
+    </div>
+    <div class=”col-md-4”>
+      <div class=”card-dark p-3 h-100”>
+        <div class=”section-title mb-2”>&#128172; Comms Details</div>
+        {% for a in e.today_comms_apps %}
+        <div class=”mb-2”>
+          <div class=”d-flex justify-content-between” style=”font-size:.8rem;”>
+            <span style=”color:#c0cfe0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;”>{{ loop.index }}. {{ a.app }}</span>
+            <span style=”color:#10b981;font-weight:600;”>{{ a.dur }}</span>
+          </div>
+          <div style=”height:4px;background:rgba(16,185,129,.15);border-radius:2px;margin-top:3px;”>
+            <div style=”height:100%;width:100%;background:linear-gradient(90deg,#10b981,#34d399);border-radius:2px;”></div>
+          </div>
+        </div>
+        {% endfor %}
+        {% if not e.today_comms_apps %}<div class=”text-muted” style=”font-size:.8rem;”>No comms activity today</div>{% endif %}
+      </div>
+    </div>
+    <div class=”col-md-4”>
+      <div class=”card-dark p-3 h-100”>
+        <div class=”section-title mb-2”>&#127381; Non-Work / Other</div>
+        {% for a in e.today_nonwork %}
+        <div class=”d-flex justify-content-between mb-1” style=”font-size:.8rem;”>
+          <span style=”color:#c0cfe0;”>{{ loop.index }}. {{ a.app }}</span>
+          <span style=”color:#f59e0b;font-weight:600;”>{{ a.dur }}</span>
+        </div>
+        {% endfor %}
+        {% if not e.today_nonwork %}<div class=”text-muted” style=”font-size:.8rem;”>No non-work activity</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Browser Tabs (ActivityWatch style) -->
+  <div class=”card-dark p-3 mb-3”>
+    <div class=”section-title mb-3”>&#127760; Browser Tab Activity — Active Time per Tab (Chrome / Edge)</div>
+    {% if e.browser_tabs %}
+    {% set max_tab_s = e.browser_tabs[0].secs %}
+    {% for t in e.browser_tabs %}
+    <div class=”mb-2”>
+      <div class=”d-flex justify-content-between align-items-center” style=”font-size:.82rem;gap:8px;”>
+        <span style=”color:#c0cfe0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;”>
+          <span style=”color:#4a7a9b;margin-right:6px;”>{{ loop.index }}</span>{{ t.title }}
+        </span>
+        {% if t.tag %}
+        <span style=”flex-shrink:0;font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:10px;background:{{ t.tag_color }}22;color:{{ t.tag_color }};border:1px solid {{ t.tag_color }}55;”>{{ t.tag }}</span>
+        {% endif %}
+        <span style=”flex-shrink:0;color:#60a5fa;font-weight:600;”>{{ t.dur }}</span>
+      </div>
+      <div style=”height:5px;background:rgba(255,255,255,.06);border-radius:3px;margin-top:4px;”>
+        {% if t.tag == '🎮 GAME' %}
+        <div style=”height:100%;width:{{ (t.secs / max_tab_s * 100)|int }}%;background:linear-gradient(90deg,#dc2626,#f87171);border-radius:3px;”></div>
+        {% elif '⚠' in t.tag %}
+        <div style=”height:100%;width:{{ (t.secs / max_tab_s * 100)|int }}%;background:linear-gradient(90deg,#f97316,#fb923c);border-radius:3px;”></div>
+        {% elif '✓' in t.tag %}
+        <div style=”height:100%;width:{{ (t.secs / max_tab_s * 100)|int }}%;background:linear-gradient(90deg,#22c55e,#4ade80);border-radius:3px;”></div>
+        {% else %}
+        <div style=”height:100%;width:{{ (t.secs / max_tab_s * 100)|int }}%;background:linear-gradient(90deg,#06b6d4,#22d3ee);border-radius:3px;”></div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class=”text-muted” style=”font-size:.83rem;”>No browser tab data yet for today</div>
+    {% endif %}
+  </div>
+
+  <div class=”row g-3”>
+    <div class=”col-lg-8”>
+      <!-- Daily Login/Logout Table -->
+      <div class=”card-dark p-3 mb-3”>
+        <div class=”section-title mb-2”>&#128197; This Month — Daily Login &amp; Logout Times</div>
+        <div class=”table-responsive”>
+        <table class=”table table-dark-custom mb-0” style=”font-size:.82rem;”>
+          <thead><tr><th>Day</th><th>Login</th><th>Shutdown / Logoff</th><th>Active Hrs</th></tr></thead>
+          <tbody>
+          {% for d in e.cal %}{% if d.worked %}
+          <tr>
+            <td style=”color:#7ab3e0;font-weight:600;”>{{ d.day }}</td>
+            <td style=”color:#22c55e;”>{{ d.login if d.login != '--' else '—' }}</td>
+            <td style=”color:#ef4444;”>{{ d.logout if d.logout != '--' else '—' }}</td>
+            <td><span style=”background:rgba(108,140,255,.15);color:#6c8cff;padding:2px 8px;border-radius:6px;font-weight:600;”>{{ d.active }}</span></td>
+          </tr>
+          {% endif %}{% endfor %}
+          </tbody>
+        </table>
         </div>
       </div>
-      <div class="card-dark p-3">
-        <div class="section-title mb-2"><i class="fa fa-list me-1"></i>Recent Events (last 50)</div>
-        <div class="table-responsive" style="max-height:320px;overflow-y:auto;">
-        <table class="table table-dark-custom mb-0" style="font-size:.8rem;">
-          <thead><tr><th>Date</th><th>Time</th><th>Event</th><th>Serial</th><th>IP</th><th>City</th></tr></thead>
+      <!-- Recent Events -->
+      <div class=”card-dark p-3”>
+        <div class=”section-title mb-2”>&#9776; Recent Events (last 50)</div>
+        <div class=”table-responsive” style=”max-height:280px;overflow-y:auto;”>
+        <table class=”table table-dark-custom mb-0” style=”font-size:.78rem;”>
+          <thead><tr><th>Date</th><th>Time</th><th>Event</th><th>IP</th><th>City</th></tr></thead>
           <tbody>
           {% for r in e.recent %}
           <tr>
             <td>{{ r.date }}</td><td>{{ r.time }}</td>
-            <td>
-              {% set ev = r.event | upper %}
-              {% if ev == 'LOGIN' %}
-                <span style="color:#22c55e;font-weight:600;">&#9654; LOGIN</span>
-              {% elif ev == 'LOGIN(UNLOCK)' %}
-                <span style="color:#22c55e;">&#128275; Unlock</span>
-              {% elif ev == 'LOGIN(SCREEN-ON)' %}
-                <span style="color:#22c55e;">&#128161; Screen ON</span>
-              {% elif ev == 'LOGIN(IDLE-RESUME)' %}
-                <span style="color:#86efac;">&#9654; Idle Resume</span>
-              {% elif ev == 'LOGOUT(SHUTDOWN)' %}
-                <span style="color:#ef4444;font-weight:600;">&#9209; SHUTDOWN</span>
-              {% elif ev == 'LOGOUT(LOGOFF)' %}
-                <span style="color:#ef4444;font-weight:600;">&#128682; Log Off</span>
-              {% elif ev == 'LOGOUT(LOCK)' %}
-                <span style="color:#f97316;">&#128274; Locked</span>
-              {% elif ev == 'LOGOUT(SCREEN-OFF)' %}
-                <span style="color:#f97316;">&#127769; Screen OFF</span>
-              {% elif ev == 'LOGOUT(IDLE)' %}
-                <span style="color:#fbbf24;">&#128336; Idle</span>
-              {% elif ev == 'HEARTBEAT' %}
-                <span style="color:#475569;">&#9679; Heartbeat</span>
-              {% elif 'LOGIN' in ev %}
-                <span style="color:#22c55e;">&#9654; {{ r.event }}</span>
-              {% elif 'LOGOUT' in ev %}
-                <span style="color:#ef4444;">&#9209; {{ r.event }}</span>
-              {% else %}
-                <span style="color:#94a3b8;">{{ r.event }}</span>
-              {% endif %}
+            <td>{% set ev = r.event | upper %}
+              {% if ev == 'LOGIN' %}<span style=”color:#22c55e;font-weight:600;”>&#9654; LOGIN</span>
+              {% elif 'LOGIN' in ev %}<span style=”color:#22c55e;”>&#9654; {{ r.event }}</span>
+              {% elif ev == 'LOGOUT(SHUTDOWN)' %}<span style=”color:#ef4444;font-weight:600;”>&#9209; SHUTDOWN</span>
+              {% elif ev == 'LOGOUT(LOGOFF)' %}<span style=”color:#ef4444;font-weight:600;”>&#128682; Log Off</span>
+              {% elif 'LOGOUT' in ev %}<span style=”color:#f97316;”>&#9209; {{ r.event }}</span>
+              {% elif ev == 'HEARTBEAT' %}<span style=”color:#475569;”>&#9679; Heartbeat</span>
+              {% else %}<span style=”color:#94a3b8;”>{{ r.event }}</span>{% endif %}
             </td>
-            <td><small class="text-muted">{{ r.serial }}</small></td>
-            <td><small class="text-muted">{{ r.ip }}</small></td>
-            <td><small class="text-muted">{{ r.city }}</small></td>
+            <td><small class=”text-muted”>{{ r.ip }}</small></td>
+            <td><small class=”text-muted”>{{ r.city }}</small></td>
           </tr>
           {% endfor %}
           </tbody>
@@ -1226,26 +1393,41 @@ DETAIL_HTML = """<!DOCTYPE html>
         </div>
       </div>
     </div>
-    <div class="col-lg-4">
-      <div class="card-dark p-3">
-        <div class="section-title mb-3"><i class="fa fa-chart-bar me-1"></i>Top 10 Apps This Month</div>
+    <div class=”col-lg-4”>
+      <div class=”card-dark p-3 mb-3”>
+        <div class=”section-title mb-3”>&#128202; Top 10 Apps This Month</div>
         {% for a in e.top10_apps %}
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <div style="font-size:.83rem;color:#c0cfe0;max-width:65%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-            <span style="color:#4a7a9b;margin-right:6px;">{{ loop.index }}</span>{{ a.app }}
+        <div class=”d-flex justify-content-between align-items-center mb-2”>
+          <div style=”font-size:.82rem;color:#c0cfe0;max-width:68%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;”>
+            <span style=”color:#4a7a9b;margin-right:6px;”>{{ loop.index }}</span>{{ a.app }}
           </div>
-          <div style="font-size:.83rem;color:#60a5fa;font-weight:600;">{{ a.dur }}</div>
+          <div style=”font-size:.82rem;color:#60a5fa;font-weight:600;”>{{ a.dur }}</div>
         </div>
         {% endfor %}
-        {% if not e.top10_apps %}
-        <div class="text-muted" style="font-size:.83rem;">No app data for this month.</div>
-        {% endif %}
+        {% if not e.top10_apps %}<div class=”text-muted” style=”font-size:.83rem;”>No app data</div>{% endif %}
+      </div>
+      <!-- Daily Hours Calendar -->
+      <div class=”card-dark p-3”>
+        <div class=”section-title mb-2”>&#9201; This Month — Daily Active Hours</div>
+        <div>
+        {% for d in e.cal %}
+          <div class=”cal-day {% if d.worked %}worked{% endif %}”>
+            <div style=”color:#4a7a9b;font-size:.7rem;”>{{ d.day }}</div>
+            {% if d.worked %}
+              <div class=”hrs”>{{ d.dec }}</div>
+              <div style=”color:#4a9b6a;font-size:.68rem;”>{{ d.active }}</div>
+            {% else %}
+              <div style=”color:#3a4a5a;font-size:.85rem;”>—</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+        </div>
       </div>
     </div>
   </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body></html>"""
+<script src=”https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js”></script>
+</body></html>”””
 
 
 # â”€â”€ ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
