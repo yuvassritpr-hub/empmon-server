@@ -1036,6 +1036,7 @@ INDEX_HTML = """<!DOCTYPE html>
       <i class="fa fa-shield-halved me-2" style="color:#6c8cff;"></i>{{ company }}
     </span>
     <span class="ms-3" style="color:#4a7a9b;font-size:.82rem;">Employee Monitor Dashboard v8</span>
+    <a href="/daily" style="margin-left:18px;color:#60a5fa;font-size:.82rem;text-decoration:none;border:1px solid #60a5fa33;padding:3px 10px;border-radius:6px;">&#9200; Daily Timeline</a>
   </div>
   <div class="d-flex align-items-center gap-3">
     <span class="refresh-note"><i class="fa fa-rotate me-1"></i>Auto-refresh {{ refresh }}s</span>
@@ -1442,6 +1443,256 @@ DETAIL_HTML = """<!DOCTYPE html>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body></html>"""
+
+
+DAILY_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Daily Timeline &mdash; {{ company }}</title>""" + BASE_STYLE + """
+<style>
+.tl-wrap { padding: 24px; }
+.tl-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; margin-bottom: 18px; overflow: hidden; }
+.tl-header { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--card-border); }
+.tl-avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg,#6c8cff,#818cf8); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .95rem; color: #fff; flex-shrink: 0; }
+.tl-name { font-weight: 700; color: var(--text); font-size: .95rem; }
+.tl-meta { color: var(--text-dim); font-size: .76rem; margin-top: 2px; }
+.tl-stats { display: flex; gap: 22px; margin-left: auto; flex-wrap: wrap; }
+.tl-stat { text-align: center; }
+.tl-stat-val { font-size: .95rem; font-weight: 700; }
+.tl-stat-lbl { font-size: .66rem; color: var(--text-dim); margin-top: 1px; }
+.tl-body { padding: 16px 18px; }
+/* Hour ruler */
+.hour-ruler { display: flex; margin-bottom: 4px; }
+.hour-tick { flex: 1; font-size: .6rem; color: var(--text-dim); text-align: left; padding-left: 1px; }
+/* Timeline bar */
+.tl-bar-wrap { position: relative; height: 28px; background: #1a2030; border-radius: 6px; overflow: hidden; margin-bottom: 8px; }
+.tl-seg { position: absolute; top: 0; height: 100%; border-radius: 2px; }
+.seg-active { background: linear-gradient(90deg,#3b6fff,#60a5fa); }
+.seg-idle   { background: linear-gradient(90deg,#b45309,#f59e0b); opacity:.75; }
+/* Event markers */
+.tl-markers { position: relative; height: 18px; }
+.tl-marker { position: absolute; transform: translateX(-50%); font-size: .7rem; white-space: nowrap; }
+.mk-login    { color: #22c55e; font-weight: 700; }
+.mk-logout   { color: #ef4444; font-weight: 700; }
+.mk-lock     { color: #94a3b8; }
+.mk-unlock   { color: #60a5fa; }
+/* Summary row */
+.tl-summary { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 6px; font-size: .76rem; }
+.tl-pill { background: var(--card-border); border-radius: 6px; padding: 3px 10px; }
+.no-data { text-align: center; padding: 40px; color: var(--text-dim); font-size: .9rem; }
+</style>
+</head>
+<body>
+<nav class="navbar-dark-custom px-4 py-3 d-flex justify-content-between align-items-center">
+  <div>
+    <span class="brand-logo">&#128737; {{ company }}</span>
+    <span style="margin-left:14px;color:#4a7a9b;font-size:.82rem;">Daily Timeline &mdash; {{ today }}</span>
+    <a href="/" style="margin-left:14px;color:#60a5fa;font-size:.8rem;text-decoration:none;">&larr; Dashboard</a>
+  </div>
+  <span style="color:#4a7a9b;font-size:.8rem;">{{ now }}</span>
+</nav>
+<div class="tl-wrap">
+  <!-- Hour ruler labels -->
+  <div style="padding:0 18px 4px;">
+    <div class="hour-ruler">
+      {% for h in range(0,25,2) %}
+        <div class="hour-tick" style="flex-basis:{{ 100/12 }}%;">{{ "%02d:00"|format(h) }}</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if not employees %}
+    <div class="no-data">No employee data for today yet.</div>
+  {% endif %}
+
+  {% for e in employees %}
+  <div class="tl-card">
+    <!-- Header -->
+    <div class="tl-header">
+      <div class="tl-avatar">{{ e.username[:2].upper() }}</div>
+      <div>
+        <div class="tl-name">{{ e.username }}</div>
+        <div class="tl-meta">{{ e.computer }} &nbsp;|&nbsp; {{ e.location }}</div>
+      </div>
+      <div class="tl-stats">
+        <div class="tl-stat">
+          <div class="tl-stat-val" style="color:#22c55e;">{{ e.login or "&mdash;" }}</div>
+          <div class="tl-stat-lbl">Login</div>
+        </div>
+        <div class="tl-stat">
+          <div class="tl-stat-val" style="color:#ef4444;">{{ e.logout or "&mdash;" }}</div>
+          <div class="tl-stat-lbl">Shutdown</div>
+        </div>
+        <div class="tl-stat">
+          <div class="tl-stat-val" style="color:#60a5fa;">{{ e.active_hrs }}</div>
+          <div class="tl-stat-lbl">Active</div>
+        </div>
+        <div class="tl-stat">
+          <div class="tl-stat-val" style="color:#f59e0b;">{{ e.idle_hrs }}</div>
+          <div class="tl-stat-lbl">Idle</div>
+        </div>
+        <div class="tl-stat">
+          <div class="tl-stat-val">{{ e.total_hrs }}</div>
+          <div class="tl-stat-lbl">Total Session</div>
+        </div>
+        <div class="tl-stat">
+          <div class="tl-stat-val" style="color:#94a3b8;">{{ e.lock_count }}&times;</div>
+          <div class="tl-stat-lbl">Locks</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timeline bar -->
+    <div class="tl-body">
+      <div class="tl-bar-wrap">
+        {% for seg in e.segments %}
+          <div class="tl-seg {{ seg.cls }}"
+               style="left:{{ seg.left }}%;width:{{ seg.width }}%;"></div>
+        {% endfor %}
+        <!-- Session overlay (login->logout border) -->
+        {% if e.session_left is not none %}
+          <div style="position:absolute;top:0;left:{{ e.session_left }}%;width:{{ e.session_width }}%;
+                      border:2px solid rgba(255,255,255,.18);border-radius:4px;height:100%;box-sizing:border-box;pointer-events:none;"></div>
+        {% endif %}
+      </div>
+
+      <!-- Event markers below bar -->
+      <div class="tl-markers">
+        {% if e.login_pct is not none %}
+          <div class="tl-marker mk-login" style="left:{{ e.login_pct }}%;" title="Login {{ e.login }}">&#9654;{{ e.login }}</div>
+        {% endif %}
+        {% if e.logout_pct is not none %}
+          <div class="tl-marker mk-logout" style="left:{{ e.logout_pct }}%;" title="Shutdown {{ e.logout }}">&#9209;{{ e.logout }}</div>
+        {% endif %}
+        {% for lk in e.lock_markers %}
+          <div class="tl-marker mk-lock" style="left:{{ lk.pct }}%;" title="Lock {{ lk.t }}">&#128274;</div>
+        {% endfor %}
+        {% for ul in e.unlock_markers %}
+          <div class="tl-marker mk-unlock" style="left:{{ ul.pct }}%;" title="Unlock {{ ul.t }}">&#128275;</div>
+        {% endfor %}
+      </div>
+
+      <!-- Summary pills -->
+      <div class="tl-summary">
+        {% if e.login %}<span class="tl-pill" style="color:#22c55e;">&#9654; Login: {{ e.login }}</span>{% endif %}
+        {% if e.logout %}<span class="tl-pill" style="color:#ef4444;">&#9209; Shutdown: {{ e.logout }}</span>{% endif %}
+        <span class="tl-pill" style="color:#60a5fa;">Active: {{ e.active_hrs }}</span>
+        <span class="tl-pill" style="color:#f59e0b;">Idle: {{ e.idle_hrs }}</span>
+        <span class="tl-pill">Session: {{ e.total_hrs }}</span>
+        {% if e.lock_count %}<span class="tl-pill" style="color:#94a3b8;">&#128274; {{ e.lock_count }} Locks &nbsp;|&nbsp; &#128275; {{ e.unlock_count }} Unlocks</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+</body></html>"""
+
+
+def _pct(time_str):
+    """Convert HH:MM:SS or HH:MM to 0-100 percentage of 24h day."""
+    if not time_str or time_str == "--":
+        return None
+    try:
+        parts = time_str.split(":")
+        h, m = int(parts[0]), int(parts[1])
+        return round((h * 60 + m) / 1440 * 100, 3)
+    except Exception:
+        return None
+
+
+@app.route("/daily")
+def daily_view():
+    today = now_ist().strftime("%Y-%m-%d")
+    with get_db() as conn:
+        emps = conn.execute(
+            "SELECT DISTINCT username, computer FROM raw_log WHERE date=? ORDER BY username",
+            (today,)).fetchall()
+
+        result = []
+        for emp in emps:
+            un, pc = emp["username"], emp["computer"]
+
+            events = conn.execute(
+                "SELECT time, event, city FROM raw_log WHERE date=? AND username=? AND computer=? ORDER BY time",
+                (today, un, pc)).fetchall()
+
+            app_rows = conn.execute(
+                "SELECT time, duration_sec, state FROM app_log WHERE date=? AND username=? AND computer=? ORDER BY time",
+                (today, un, pc)).fetchall()
+
+            loc_row = conn.execute(
+                "SELECT city, region FROM raw_log WHERE date=? AND username=? AND computer=? AND city IS NOT NULL LIMIT 1",
+                (today, un, pc)).fetchone()
+            location = f"{loc_row['city']}, {loc_row['region']}" if loc_row and loc_row['city'] else "N/A"
+
+            login_t = logout_t = None
+            lock_times, unlock_times = [], []
+            for ev in events:
+                evup = ev["event"].upper()
+                if evup.startswith("LOGIN") and not login_t:
+                    login_t = ev["time"][:5]
+                if evup in ("LOGOUT(SHUTDOWN)", "LOGOUT(LOGOFF)"):
+                    logout_t = ev["time"][:5]
+                if evup == "LOCK":
+                    lock_times.append(ev["time"][:5])
+                if evup == "UNLOCK":
+                    unlock_times.append(ev["time"][:5])
+
+            total_active = total_idle = 0
+            segments = []
+            for ar in app_rows:
+                dur = ar["duration_sec"] or 0
+                state = (ar["state"] or "active").lower()
+                pct = _pct(ar["time"])
+                if pct is None:
+                    continue
+                width = round(dur / 86400 * 100, 3)
+                if width < 0.01:
+                    continue
+                segments.append({
+                    "left": pct,
+                    "width": min(width, 100 - pct),
+                    "cls": "seg-active" if state == "active" else "seg-idle",
+                })
+                if state == "active":
+                    total_active += dur
+                else:
+                    total_idle += dur
+
+            login_pct  = _pct(login_t)
+            logout_pct = _pct(logout_t)
+            session_left = session_width = None
+            if login_pct is not None:
+                end_pct = logout_pct if logout_pct is not None else _pct(now_ist().strftime("%H:%M:%S"))
+                if end_pct and end_pct > login_pct:
+                    session_left  = login_pct
+                    session_width = end_pct - login_pct
+                    total_sess = int((end_pct - login_pct) / 100 * 86400)
+                else:
+                    total_sess = 0
+            else:
+                total_sess = 0
+
+            result.append({
+                "username": un, "computer": pc, "location": location,
+                "login": login_t, "logout": logout_t,
+                "login_pct": login_pct, "logout_pct": logout_pct,
+                "session_left": session_left, "session_width": session_width,
+                "active_hrs": fmt_secs(total_active),
+                "idle_hrs":   fmt_secs(total_idle),
+                "total_hrs":  fmt_secs(total_sess),
+                "lock_count": len(lock_times), "unlock_count": len(unlock_times),
+                "lock_markers":   [{"pct": _pct(t), "t": t} for t in lock_times if _pct(t)],
+                "unlock_markers": [{"pct": _pct(t), "t": t} for t in unlock_times if _pct(t)],
+                "segments": segments,
+            })
+
+    return render_template_string(
+        DAILY_HTML,
+        company=COMPANY, today=today, now=now_ist().strftime("%H:%M:%S"),
+        employees=result)
 
 
 # -- ROUTES -----------------------------------------------------
