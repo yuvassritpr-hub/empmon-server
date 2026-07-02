@@ -1605,6 +1605,7 @@ def _pct(time_str):
 
 @app.route("/daily")
 def daily_view():
+  try:
     today = now_ist().strftime("%Y-%m-%d")
     with get_db() as conn:
         emps = conn.execute(
@@ -1620,7 +1621,7 @@ def daily_view():
                 (today, un, pc)).fetchall()
 
             app_rows = conn.execute(
-                "SELECT time, duration_sec, state FROM app_log WHERE date=? AND username=? AND computer=? ORDER BY time",
+                "SELECT start_time AS time, duration_sec, state FROM app_log WHERE date=? AND username=? AND computer=? ORDER BY start_time",
                 (today, un, pc)).fetchall()
 
             loc_row = conn.execute(
@@ -1694,6 +1695,9 @@ def daily_view():
         DAILY_HTML,
         company=COMPANY, today=today, now=now_ist().strftime("%H:%M:%S"),
         employees=result)
+  except Exception:
+    import traceback
+    return f"<pre>DAILY ERROR:\n{traceback.format_exc()}</pre>", 500
 
 
 # -- ROUTES -----------------------------------------------------
