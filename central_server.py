@@ -469,7 +469,7 @@ def get_all_employees_today():
                 except Exception:
                     pass
 
-            # Status -" walk events newestâ†’oldest to find last meaningful state
+            # Status -" walk events newest->oldest to find last meaningful state
             status = "Offline"
             if last_event_dt:
                 mins_ago = (now_ist() - last_event_dt).total_seconds() / 60
@@ -535,7 +535,7 @@ def get_all_employees_today():
                     month_active_s += ar["duration_sec"] or 0
                     days_worked.add(ar["date"])
 
-            # Monthly session hours (loginâ†’logout pairs)
+            # Monthly session hours (login->logout pairs)
             month_sess_s = 0
             pending_dt = None
             for r in month_raw:
@@ -1788,7 +1788,7 @@ def build_monthly_summary(month_str):
         # Active / idle / app classification
         active_s = idle_s = work_s = comms_s = nonwork_s = 0
         app_ctr  = Counter()
-        social_monthly  = defaultdict(int)   # platform â†’ secs
+        social_monthly  = defaultdict(int)   # platform -> secs
         fileshare_monthly = defaultdict(int)
 
         for ar in app_rows:
@@ -2138,9 +2138,9 @@ MONTHLY_HTML = """<!DOCTYPE html>
           <div class="bar-nonwork"  style="width:{{ e.nonwork_pct }}%"></div>
         </div>
         <div class="bar-lbl">
-          <span style="color:#22c55e;">â–ˆ Work {{ e.work_pct }}%</span>&nbsp;&nbsp;
-          <span style="color:#60a5fa;">â–ˆ Comms {{ e.comms_pct }}%</span>&nbsp;&nbsp;
-          <span style="color:#ef4444;">â–ˆ Non-Work {{ e.nonwork_pct }}%</span>
+          <span style="color:#22c55e;">* Work {{ e.work_pct }}%</span>&nbsp;&nbsp;
+          <span style="color:#60a5fa;">* Comms {{ e.comms_pct }}%</span>&nbsp;&nbsp;
+          <span style="color:#ef4444;">* Non-Work {{ e.nonwork_pct }}%</span>
         </div>
       </div>
 
@@ -2300,7 +2300,7 @@ MONTHLY_HTML = """<!DOCTYPE html>
 {% endif %}
 
 <div style="text-align:center;color:#2a4a6a;font-size:.72rem;padding:20px;">
-  {{ company }} Â· Monthly Summary Â· {{ month_label }} Â· Generated {{ now }}
+  {{ company }} . Monthly Summary . {{ month_label }} . Generated {{ now }}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
