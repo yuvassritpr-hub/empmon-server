@@ -567,7 +567,7 @@ def get_all_employees_today():
                 _SKW = ["instagram","facebook","whatsapp","youtube","tiktok","snapchat",
                         "twitter","reddit","netflix","spotify","discord","telegram"]
                 for ar in app_rows:
-                    tl = (ar.get("window_title") or "").lower()
+                    tl = (ar["window_title"] or "").lower()
                     if any(k in tl for k in _SKW):
                         social_sites = [{"domain": "detected-via-title"}]
                         break
