@@ -554,6 +554,15 @@ def get_all_employees_today():
                         days_worked.add(pending_dt.strftime("%Y-%m-%d"))
                     pending_dt = None
 
+            # Social media sites from browser_log
+            SOCIAL_DOMAINS = {
+                "instagram.com","facebook.com","twitter.com","x.com","tiktok.com",
+                "snapchat.com","youtube.com","reddit.com","netflix.com","hotstar.com",
+                "spotify.com","discord.com","telegram.org","whatsapp.com","threads.net",
+                "linkedin.com","pinterest.com","tumblr.com",
+            }
+            social_sites = [s for s in top_sites if any(sd in s["domain"] for sd in SOCIAL_DOMAINS)]
+
             rows.append({
                 "username":        username,
                 "computer":        computer,
@@ -569,6 +578,7 @@ def get_all_employees_today():
                 "top_app":         top_app,
                 "top5_today":      top5_today,
                 "top_sites":       top_sites,
+                "social_sites":    social_sites,
                 "vpn_on":          vpn_on,
                 "vpn_software":    vpn_software,
                 "days_worked":     len(days_worked),
@@ -1038,6 +1048,7 @@ INDEX_HTML = """<!DOCTYPE html>
     </span>
     <span class="ms-3" style="color:#4a7a9b;font-size:.82rem;">Employee Monitor Dashboard v8</span>
     <a href="/daily" style="margin-left:18px;color:#60a5fa;font-size:.82rem;text-decoration:none;border:1px solid #60a5fa33;padding:3px 10px;border-radius:6px;">&#9200; Daily Timeline</a>
+    <a href="/alerts" style="margin-left:10px;color:#f87171;font-size:.82rem;text-decoration:none;border:1px solid #f8717133;padding:3px 10px;border-radius:6px;">&#9888; Social Alerts</a>
   </div>
   <div class="d-flex align-items-center gap-3">
     <span class="refresh-note"><i class="fa fa-rotate me-1"></i>Auto-refresh {{ refresh }}s</span>
@@ -1094,7 +1105,12 @@ INDEX_HTML = """<!DOCTYPE html>
       {% for i, e in employees %}
       <tr>
         <td class="text-muted">{{ i }}</td>
-        <td><strong style="color:#7ab3e0;">{{ e.username }}</strong></td>
+        <td>
+          <strong style="color:#7ab3e0;">{{ e.username }}</strong>
+          {% if e.social_sites %}
+            <a href="/alerts" title="Social media detected today"><span style="background:#dc2626;color:#fff;font-size:.6rem;font-weight:700;border-radius:4px;padding:1px 5px;margin-left:4px;vertical-align:middle;">&#9888; SOCIAL</span></a>
+          {% endif %}
+        </td>
         <td>{{ e.computer }}</td>
         <td><small class="text-muted">{{ e.serial }}</small></td>
         <td>
@@ -1698,6 +1714,155 @@ def daily_view():
   except Exception:
     import traceback
     return f"<pre>DAILY ERROR:\n{traceback.format_exc()}</pre>", 500
+
+
+ALERTS_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Social Media Alerts &mdash; {{ company }}</title>""" + BASE_STYLE + """
+<style>
+.al-wrap { padding: 24px; }
+.al-card { background: var(--card-bg); border: 1px solid #dc262633; border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+.al-head  { background: #dc262618; display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-bottom: 1px solid #dc262622; }
+.al-name  { font-weight: 700; color: #f87171; font-size: .95rem; }
+.al-pc    { color: var(--text-dim); font-size: .78rem; margin-left: 8px; }
+.al-badge { background: #dc2626; color: #fff; font-size: .65rem; font-weight: 700; border-radius: 4px; padding: 2px 7px; margin-left: auto; }
+.al-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.al-table th { padding: 8px 16px; color: var(--text-dim); font-weight: 600; text-align: left; border-bottom: 1px solid var(--card-border); }
+.al-table td { padding: 8px 16px; border-bottom: 1px solid var(--card-border)10; }
+.site-icon { font-size: 1rem; margin-right: 6px; }
+.no-alert { text-align: center; padding: 48px; color: var(--text-dim); font-size: .9rem; }
+.clean-badge { background: #16a34a22; color: #22c55e; border: 1px solid #16a34a44; border-radius: 6px; padding: 3px 10px; font-size: .75rem; }
+</style>
+</head>
+<body>
+<nav class="navbar-dark-custom px-4 py-3 d-flex justify-content-between align-items-center">
+  <div>
+    <span class="brand-logo">&#9888; {{ company }} &mdash; Social Media Alerts</span>
+    <a href="/" style="margin-left:14px;color:#60a5fa;font-size:.8rem;text-decoration:none;">&larr; Dashboard</a>
+    <a href="/daily" style="margin-left:12px;color:#60a5fa;font-size:.8rem;text-decoration:none;">&#9200; Daily Timeline</a>
+  </div>
+  <span style="color:#4a7a9b;font-size:.8rem;">{{ today }} &nbsp;|&nbsp; {{ now }}</span>
+</nav>
+<div class="al-wrap">
+  <div style="margin-bottom:18px;">
+    <span style="color:#f87171;font-weight:700;font-size:1rem;">&#9888; Social Media Usage Today</span>
+    <span style="color:var(--text-dim);font-size:.8rem;margin-left:10px;">Detected from browser history (Chrome / Edge)</span>
+  </div>
+
+  {% if not alerts %}
+    <div class="no-alert">
+      <div style="font-size:2rem;margin-bottom:8px;">&#10003;</div>
+      <strong style="color:#22c55e;">No social media detected today</strong><br>
+      <small>Browser history is scanned every 5 minutes via the agent heartbeat.</small>
+    </div>
+  {% endif %}
+
+  {% for a in alerts %}
+  <div class="al-card">
+    <div class="al-head">
+      <div style="width:36px;height:36px;border-radius:50%;background:#dc262633;display:flex;align-items:center;justify-content:center;font-weight:700;color:#f87171;">{{ a.username[:2].upper() }}</div>
+      <div>
+        <span class="al-name">{{ a.username }}</span>
+        <span class="al-pc">{{ a.computer }}</span>
+      </div>
+      <span class="al-badge">&#9888; {{ a.sites|length }} site{{ 's' if a.sites|length != 1 else '' }}</span>
+    </div>
+    <table class="al-table">
+      <thead><tr>
+        <th>Site</th>
+        <th>Time Spent</th>
+        <th>Category</th>
+      </tr></thead>
+      <tbody>
+      {% for s in a.sites %}
+      <tr>
+        <td>
+          {% if 'youtube' in s.domain %}&#127916;
+          {% elif 'instagram' in s.domain %}&#128247;
+          {% elif 'facebook' in s.domain %}&#128172;
+          {% elif 'whatsapp' in s.domain %}&#128242;
+          {% elif 'twitter' in s.domain or 'x.com' in s.domain %}&#128038;
+          {% elif 'tiktok' in s.domain %}&#127926;
+          {% elif 'netflix' in s.domain %}&#127902;
+          {% elif 'spotify' in s.domain %}&#127925;
+          {% elif 'discord' in s.domain %}&#128172;
+          {% elif 'reddit' in s.domain %}&#128266;
+          {% elif 'telegram' in s.domain %}&#128257;
+          {% else %}&#127760;
+          {% endif %}
+          <strong>{{ s.domain }}</strong>
+        </td>
+        <td style="color:#f87171;font-weight:600;">{{ s.dur }}</td>
+        <td>
+          {% if 'youtube' in s.domain or 'netflix' in s.domain or 'hotstar' in s.domain or 'spotify' in s.domain %}
+            <span style="color:#f97316;">&#127916; Entertainment</span>
+          {% elif 'whatsapp' in s.domain or 'telegram' in s.domain or 'discord' in s.domain %}
+            <span style="color:#a78bfa;">&#128172; Messaging</span>
+          {% else %}
+            <span style="color:#f87171;">&#128247; Social Media</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+
+  {% if clean_employees %}
+  <div style="margin-top:24px;">
+    <div style="color:var(--text-dim);font-size:.8rem;margin-bottom:10px;">&#10003; Clean employees (no social media today):</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      {% for u in clean_employees %}
+        <span class="clean-badge">&#10003; {{ u }}</span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+</body></html>"""
+
+
+@app.route("/alerts")
+def alerts_view():
+  try:
+    today = now_ist().strftime("%Y-%m-%d")
+    SOCIAL_DOMAINS = {
+        "instagram.com","facebook.com","twitter.com","x.com","tiktok.com",
+        "snapchat.com","youtube.com","reddit.com","netflix.com","hotstar.com",
+        "spotify.com","discord.com","telegram.org","whatsapp.com","threads.net",
+        "linkedin.com","pinterest.com","tumblr.com",
+    }
+    with get_db() as conn:
+        emps = conn.execute(
+            "SELECT DISTINCT username, computer FROM raw_log WHERE date=? ORDER BY username",
+            (today,)).fetchall()
+        alerts = []
+        clean_employees = []
+        for emp in emps:
+            un, pc = emp["username"], emp["computer"]
+            site_rows = conn.execute("""
+                SELECT domain, MAX(secs) as secs FROM browser_log
+                WHERE username=? AND computer=? AND date=?
+                GROUP BY domain ORDER BY secs DESC
+            """, (un, pc, today)).fetchall()
+            social = [{"domain": r["domain"], "dur": fmt_secs(r["secs"]), "secs": r["secs"]}
+                      for r in site_rows if any(sd in r["domain"] for sd in SOCIAL_DOMAINS)]
+            if social:
+                alerts.append({"username": un, "computer": pc, "sites": social})
+            else:
+                clean_employees.append(un)
+    alerts.sort(key=lambda a: sum(s["secs"] for s in a["sites"]), reverse=True)
+    return render_template_string(
+        ALERTS_HTML,
+        company=COMPANY, today=today, now=now_ist().strftime("%H:%M:%S"),
+        alerts=alerts, clean_employees=clean_employees)
+  except Exception:
+    import traceback
+    return f"<pre>ALERTS ERROR:\n{traceback.format_exc()}</pre>", 500
 
 
 # -- ROUTES -----------------------------------------------------
