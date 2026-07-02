@@ -749,6 +749,7 @@ def get_employee_detail(username, computer):
 
     # Monthly calendar
     daily_act  = defaultdict(float)
+    daily_idle = defaultdict(float)
     daily_sess = defaultdict(float)
     app_month  = Counter()
 
@@ -769,11 +770,14 @@ def get_employee_detail(username, computer):
 
     for ar in month_app:
         dur_s = ar["duration_sec"] or 0
-        if (ar["state"] or "active").lower() == "active":
+        state = (ar["state"] or "active").lower()
+        if state == "active":
             daily_act[ar["date"]] += dur_s
             apn = ar["app"] or ""
             if apn:
                 app_month[apn] += dur_s
+        else:
+            daily_idle[ar["date"]] += dur_s
 
     now   = now_ist()
     first = now.replace(day=1)
@@ -785,6 +789,7 @@ def get_employee_detail(username, computer):
             "date":   d,
             "day":    day.strftime("%a %d"),
             "active": fmt_secs(daily_act.get(d, 0)),
+            "idle":   fmt_secs(daily_idle.get(d, 0)),
             "sess":   fmt_secs(daily_sess.get(d, 0)),
             "dec":    fmt_dec(daily_act.get(d, 0)),
             "worked": daily_act.get(d, 0) > 0 or daily_sess.get(d, 0) > 0,
@@ -1312,7 +1317,7 @@ DETAIL_HTML = """<!DOCTYPE html>
 
   <!-- Browser Tabs (ActivityWatch style) -->
   <div class="card-dark p-3 mb-3">
-    <div class="section-title mb-3">&#127760; Browser Tab Activity — Active Time per Tab (Chrome / Edge)</div>
+    <div class="section-title mb-3">&#127760; Browser Tab Activity &mdash; Active Time per Tab (Chrome / Edge)</div>
     {% if e.browser_tabs %}
     {% set max_tab_s = e.browser_tabs[0].secs %}
     {% for t in e.browser_tabs %}
@@ -1348,7 +1353,7 @@ DETAIL_HTML = """<!DOCTYPE html>
     <div class="col-lg-8">
       <!-- Daily Login/Logout Table -->
       <div class="card-dark p-3 mb-3">
-        <div class="section-title mb-2">&#128197; This Month — Daily Login &amp; Logout Times</div>
+        <div class="section-title mb-2">&#128197; This Month &mdash; Daily Login &amp; Logout Times</div>
         <div class="table-responsive">
         <table class="table table-dark-custom mb-0" style="font-size:.82rem;">
           <thead><tr><th>Day</th><th>Login</th><th>Shutdown / Logoff</th><th>Active Hrs</th></tr></thead>
@@ -1408,16 +1413,25 @@ DETAIL_HTML = """<!DOCTYPE html>
       </div>
       <!-- Daily Hours Calendar -->
       <div class="card-dark p-3">
-        <div class="section-title mb-2">&#9201; This Month — Daily Active Hours</div>
+        <div class="section-title mb-2">&#9201; This Month &mdash; Daily Active Hours</div>
         <div>
         {% for d in e.cal %}
-          <div class="cal-day {% if d.worked %}worked{% endif %}">
-            <div style="color:#4a7a9b;font-size:.7rem;">{{ d.day }}</div>
+          <div class="cal-day {% if d.worked %}worked{% endif %}" style="min-width:88px;padding:6px 8px;">
+            <div style="color:#4a7a9b;font-size:.7rem;font-weight:600;">{{ d.day }}</div>
             {% if d.worked %}
-              <div class="hrs">{{ d.dec }}</div>
-              <div style="color:#4a9b6a;font-size:.68rem;">{{ d.active }}</div>
+              <div class="hrs" style="font-size:1rem;">{{ d.dec }}</div>
+              {% if d.login != "--" %}
+                <div style="color:#22c55e;font-size:.62rem;margin-top:2px;">&#9654; {{ d.login[:5] }}</div>
+              {% endif %}
+              {% if d.logout != "--" %}
+                <div style="color:#ef4444;font-size:.62rem;">&#9209; {{ d.logout[:5] }}</div>
+              {% endif %}
+              <div style="color:#60a5fa;font-size:.62rem;margin-top:2px;">Active: {{ d.active }}</div>
+              {% if d.idle != "0h 00m 00s" %}
+                <div style="color:#f59e0b;font-size:.62rem;">Idle: {{ d.idle }}</div>
+              {% endif %}
             {% else %}
-              <div style="color:#3a4a5a;font-size:.85rem;">—</div>
+              <div style="color:#3a4a5a;font-size:.85rem;">&mdash;</div>
             {% endif %}
           </div>
         {% endfor %}
